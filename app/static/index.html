@@ -1,0 +1,748 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>AAPS 推送服务</title>
+<style>
+:root{
+  --bg:#f0f4f9; --card:#ffffff; --ink:#1c2b3a; --ink2:#64748b; --line:#e4eaf1;
+  --blue:#2f7ce0; --blue2:#5b5bd6; --grad:linear-gradient(135deg,#2f7ce0,#5b5bd6);
+  --green:#22a55f; --red:#e5484d; --shadow:0 4px 18px rgba(28,43,58,.08);
+}
+*{margin:0;padding:0;box-sizing:border-box;font-family:"PingFang SC","Microsoft Yahei",sans-serif;-webkit-tap-highlight-color:transparent;}
+body{background:var(--bg);color:var(--ink);-webkit-text-size-adjust:100%;padding-bottom:env(safe-area-inset-bottom);}
+.container{max-width:680px;margin:0 auto;padding:12px 12px 24px;}
+.card{background:var(--card);border-radius:16px;box-shadow:var(--shadow);border:1px solid var(--line);margin-bottom:14px;padding:16px;}
+.muted{color:var(--ink2);font-size:12px;}
+h3{font-size:13px;color:var(--blue);font-weight:600;letter-spacing:.05em;margin:14px 0 8px;}
+/* ===== 顶部血糖卡 ===== */
+.hero{background:var(--grad);border:none;color:#fff;position:relative;overflow:hidden;}
+.hero::after{content:"";position:absolute;right:-40px;top:-40px;width:160px;height:160px;border-radius:50%;background:rgba(255,255,255,.08);}
+.hero-top{display:flex;justify-content:space-between;align-items:center;position:relative;z-index:1;}
+.badge{display:inline-flex;align-items:center;gap:5px;padding:4px 12px;border-radius:20px;font-size:12px;color:#fff;background:rgba(255,255,255,.22);}
+.badge.leader::before{content:"";width:7px;height:7px;border-radius:50%;background:#6dff9e;box-shadow:0 0 6px #6dff9e;}
+.badge.standby::before{content:"";width:7px;height:7px;border-radius:50%;background:#ffc46d;}
+.bg-hero{text-align:center;padding:10px 0 2px;position:relative;z-index:1;}
+.bg-hero .num{font-size:60px;font-weight:700;line-height:1;letter-spacing:-.02em;}
+.bg-hero .unit{font-size:16px;opacity:.85;}
+.bg-hero .trend{font-size:17px;margin-top:6px;opacity:.95;}
+.chips{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:14px;position:relative;z-index:1;}
+.chip{background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.25);border-radius:10px;padding:6px 12px;font-size:13px;color:#fff;}
+.chip b{font-weight:600;}
+#statusMeta{text-align:center;margin-top:10px;color:rgba(255,255,255,.75);}
+.hero .btn-ghost{background:rgba(255,255,255,.2);color:#fff;border:none;}
+/* ===== 胶囊标签页 ===== */
+.tabs{display:flex;gap:4px;background:var(--card);border-radius:14px;padding:4px;box-shadow:var(--shadow);border:1px solid var(--line);margin-bottom:14px;}
+.tabbtn{flex:1;padding:10px;border:none;border-radius:11px;background:transparent;color:var(--ink2);font-size:15px;font-weight:500;cursor:pointer;transition:.2s;}
+.tabbtn.active{background:var(--grad);color:#fff;font-weight:600;box-shadow:0 3px 10px rgba(47,124,224,.35);}
+.tabpane.hidden{display:none;}
+/* ===== 按钮 ===== */
+.btn{padding:10px 16px;border:none;border-radius:10px;cursor:pointer;font-size:14px;font-weight:500;margin:3px;min-height:40px;transition:.15s;}
+.btn:active{transform:scale(.97);}
+.btn-primary{background:var(--grad);color:#fff;}
+.btn-danger{background:#fdecec;color:var(--red);border:1px solid #f6c6c8;}
+.btn-success{background:linear-gradient(135deg,#22a55f,#1d8f52);color:#fff;}
+.btn-gray{background:#eef2f7;color:#47566b;}
+.btn-sm{padding:6px 12px;font-size:13px;min-height:34px;}
+/* ===== 表单 ===== */
+input,select,textarea{padding:9px 11px;border:1.5px solid var(--line);border-radius:10px;font-size:15px;max-width:100%;background:#fbfcfe;color:var(--ink);transition:.2s;min-height:40px;touch-action:manipulation;}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--blue);box-shadow:0 0 0 3px rgba(47,124,224,.15);background:#fff;}
+textarea{width:100%;font-family:ui-monospace,Menlo,monospace;font-size:13px;}
+.flex-row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:8px 0;}
+/* ===== 滑动开关 ===== */
+.switch{position:relative;display:inline-block;width:44px;height:26px;flex-shrink:0;}
+.switch input{opacity:0;width:0;height:0;min-height:0;}
+.slider{position:absolute;cursor:pointer;inset:0;background:#cbd5e1;border-radius:26px;transition:.25s;}
+.slider::before{content:"";position:absolute;height:20px;width:20px;left:3px;top:3px;background:#fff;border-radius:50%;transition:.25s;box-shadow:0 1px 3px rgba(0,0,0,.25);}
+.switch input:checked+.slider{background:var(--green);}
+.switch input:checked+.slider::before{transform:translateX(18px);}
+/* ===== 事件表 ===== */
+table.events{width:100%;border-collapse:collapse;font-size:13px;}
+table.events th{background:#f5f8fb;color:var(--ink2);font-weight:500;}
+table.events th,table.events td{border-bottom:1px solid var(--line);padding:8px 6px;text-align:left;word-break:break-all;}
+table.events tr:last-child td{border-bottom:none;}
+/* ===== 任务列表 ===== */
+.task-row{display:flex;align-items:center;gap:10px;padding:12px 4px;border-bottom:1px solid var(--line);}
+.task-row:last-child{border-bottom:none;}
+.cat-title{font-size:13px;font-weight:600;color:var(--blue);margin:14px 0 4px;padding-left:2px;}
+.cat-title:first-child{margin-top:4px;}
+.task-num{width:22px;height:22px;border-radius:50%;background:#eef2f7;color:var(--ink2);font-size:12px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.recv-sub{display:flex;flex-wrap:wrap;gap:8px;padding:0 4px 10px 60px;align-items:center;font-size:12px;color:var(--ink2);}
+.recv-sub input{min-height:34px;padding:5px 9px;font-size:13px;}
+.recv-details{padding:0 4px 6px 60px;}
+.recv-details summary{cursor:pointer;font-size:13px;color:var(--ink2);padding:4px 0;}
+.helpbox{background:#f5f8fb;border:1px solid var(--line);border-radius:12px;padding:14px 16px;font-size:13px;line-height:1.9;color:var(--ink2);}
+.helpbox b{color:var(--ink);}
+.task-name{flex:1;font-size:16px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.task-name.off{color:#a8b3c0;text-decoration:line-through;}
+.task-editor{background:#f7fafc;border:1px solid var(--line);border-radius:12px;padding:12px;margin:10px 0 4px;}
+.cond-item{background:#fff;border:1px solid var(--line);padding:9px;border-radius:10px;margin:8px 0;display:flex;flex-wrap:wrap;gap:8px;align-items:center;}
+.warn{background:#fff7e8;border:1px solid #ffd591;color:#ad5b00;padding:10px 14px;border-radius:10px;margin-bottom:10px;font-size:13px;}
+.warn.ok{background:#effaf3;border-color:#b7e4c7;color:#1d7a45;}
+details{margin-top:8px;}
+summary{cursor:pointer;color:var(--blue);font-size:14px;font-weight:500;min-height:36px;display:flex;align-items:center;}
+#toast{position:fixed;top:calc(14px + env(safe-area-inset-top));left:50%;transform:translateX(-50%);background:#1c2b3a;color:#fff;padding:11px 20px;border-radius:12px;display:none;z-index:99;max-width:90%;font-size:14px;box-shadow:0 8px 24px rgba(0,0,0,.25);}
+/* ===== 登录页 ===== */
+#loginMask{position:fixed;inset:0;background:linear-gradient(150deg,#26436e,#5b5bd6);display:flex;align-items:center;justify-content:center;z-index:50;padding:20px;}
+.login-box{background:rgba(255,255,255,.92);backdrop-filter:blur(14px);padding:34px 28px;border-radius:20px;width:340px;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,.35);}
+.login-box h2{font-size:20px;margin-bottom:4px;}
+.login-box input{width:100%;margin:14px 0;}
+.login-box .btn{width:100%;margin:0;}
+</style>
+</head>
+<body>
+<div id="loginMask">
+  <div class="login-box">
+    <h2>AAPS 推送服务 <span style="font-size:12px;font-weight:600;color:#fff;background:var(--blue);border-radius:8px;padding:2px 8px;vertical-align:middle">v1.0-beta</span></h2>
+    <p class="muted">请输入管理密码</p>
+    <input type="password" id="loginPwd" placeholder="管理密码" onkeydown="if(event.key==='Enter')doLogin()">
+    <button class="btn btn-primary" onclick="doLogin()">登 录</button>
+    <p id="loginErr" style="color:var(--red);font-size:13px;margin-top:10px"></p>
+  </div>
+</div>
+
+<div class="container">
+  <div class="card hero">
+    <div class="hero-top">
+      <span id="roleBadge" class="badge standby">-</span>
+      <button class="btn btn-sm btn-ghost" style="margin:0" onclick="logout()">退出</button>
+    </div>
+    <div class="bg-hero">
+      <div><span class="num" id="bgNum">--</span> <span class="unit" id="bgUnit"></span></div>
+      <div class="trend" id="bgTrend">--</div>
+    </div>
+    <div class="chips">
+      <div class="chip">5分钟 <b id="cDelta">-</b></div>
+      <div class="chip">15分钟 <b id="cShort">-</b></div>
+      <div class="chip">30分钟 <b id="cLong">-</b></div>
+      <div class="chip">IOB <b id="cIob">-</b></div>
+      <div class="chip">COB <b id="cCob">-</b></div>
+      <div class="chip">最终预测 <b id="cFinal">-</b></div>
+      <div class="chip" id="chipWatch" style="display:none">⌚ 手表 <b id="cWatch">-</b></div>
+      <div class="chip" id="chipBasal" style="display:none">基础率 <b id="cBasal">-</b></div>
+      <div class="chip" id="chipRes" style="display:none">药量 <b id="cRes">-</b></div>
+    </div>
+    <p class="muted" id="statusMeta"></p>
+    <div id="pwdWarn" class="warn" style="display:none;margin-top:10px">⚠️ 正在使用默认密码，请到"设置"里修改。</div>
+  </div>
+
+  <div class="tabs">
+    <button class="tabbtn active" onclick="switchTab('status',this)">📊 事件</button>
+    <button class="tabbtn" onclick="switchTab('tasks',this)">✅ 任务</button>
+    <button class="tabbtn" onclick="switchTab('recvs',this)">📇 接收者</button>
+    <button class="tabbtn" onclick="switchTab('config',this)">🔧 设置</button>
+  </div>
+
+  <div class="card tabpane hidden" id="pane-recvs">
+    <h3>接收者名单（渠道与 Bark 通知级别）</h3>
+    <div id="recvList"></div>
+    <div class="flex-row">
+      <input id="newRecvName" placeholder="接收者名称(如:爸爸)" style="flex:1;min-width:120px">
+      <button class="btn btn-gray btn-sm" onclick="addReceiver()">➕ 添加</button>
+    </div>
+    <details class="recv-sec"><summary>👥 接收者分组（点开管理）</summary>
+      <div id="groupList"></div>
+      <div class="flex-row">
+        <input id="newGroupName" placeholder="分组名称(如:全家)" style="flex:1;min-width:120px">
+        <button class="btn btn-gray btn-sm" onclick="addGroup()">➕ 新建分组</button>
+      </div>
+    </details>
+    <div style="margin-top:12px;border-top:1px solid var(--line);padding-top:12px;">
+      <button class="btn btn-success" style="width:100%" onclick="saveReceivers()">💾 保存接收者</button>
+    </div>
+  </div>
+
+  <div class="card tabpane" id="pane-status">
+    <table class="events"><thead><tr><th>时间</th><th>任务</th><th>详情</th></tr></thead>
+    <tbody id="eventBody"></tbody></table>
+  </div>
+
+  <div class="card tabpane hidden" id="pane-tasks">
+    <div class="flex-row">
+      <button class="btn btn-primary" onclick="addNewTask()">➕ 新增任务</button>
+      <button class="btn btn-success" onclick="createWatchTasks()">🔋 一键创建手表预警</button>
+      <button class="btn btn-success" onclick="createOfflineTasks()">🔔 一键创建断线报警</button>
+      <button class="btn btn-gray" onclick="dryRun()">🧪 模拟判定</button>
+    </div>
+    <details id="dryBox" class="warn" style="display:none"><summary style="cursor:pointer;font-weight:600">🧪 模拟判定结果（点击展开/收起）</summary><div id="dryResult" class="muted" style="margin-top:8px"></div></details>
+    <div id="taskList"></div>
+  </div>
+
+  <div class="card tabpane hidden" id="pane-config">
+    <details open><summary>🌙 Nightscout 数据源（可多个 · 可命名 · 可分组）</summary>
+      <div id="nsSrcList"></div>
+      <button class="btn btn-gray btn-sm" onclick="addNsSource()">➕ 添加数据源</button>
+      <div class="flex-row">
+        <span>采集间隔(秒)：</span><input type="number" style="width:70px" id="fetchInterval" value="60">
+        <span>单位：</span><select id="unit"><option value="mmol/L">mmol/L</option><option value="mg/dL">mg/dL</option></select>
+      </div>
+      <div class="flex-row">
+        <span>本机角色：</span><select id="instanceRole">
+          <option value="auto">自动（推荐）</option>
+          <option value="primary">固定主</option>
+          <option value="standby">固定备</option>
+        </select>
+      </div>
+      <p class="muted">本机角色：只在一条设备上运行时保持"自动"即可；多台设备（如云主机+手机）同时运行时系统自动选一台执行任务，避免重复推送；"固定备"=本机不执行任务（纯备份）。</p>
+    </details>
+    <details><summary>💬 微信推送 · 配置说明</summary>
+      <div class="helpbox">
+        <b>使用"小毛机器人"（maobot）推送：</b><br>
+        1️⃣ 在微信里添加机器人好友<br>
+        2️⃣ 向机器人查询你的 <b>用户ID</b> 和 <b>API Key</b>（在机器人后台/对话指令中获取）<br>
+        3️⃣ 到"📇 接收者"页为每个人填写：<b>微信接收人</b>=用户ID、<b>微信Key</b>=API Key<br>
+        默认服务器地址：<b>https://api.maobot.org/send_message</b>（已内置，接收者可单独覆盖）
+      </div>
+    </details>
+    <details><summary>🍎 Bark 推送（iPhone）· 配置说明</summary>
+      <div class="helpbox">
+        1️⃣ App Store 安装 <b>Bark</b>，打开后复制示例链接中的 Key<br>
+        2️⃣ 填到"📇 接收者"页对应接收者的 <b>Bark Key</b><br>
+        默认服务器地址：<b>https://api.day.app</b>（已内置，接收者可单独覆盖）<br>
+        通知级别：<b>常规</b> / <b>时效性</b>(默认，突破专注模式) / <b>静默</b>(不响不亮屏) / <b>警告</b>(持续响铃，需Bark App内授权)
+      </div>
+    </details>
+    <details><summary>🔑 管理密码 / 配置备份</summary>
+      <div class="flex-row"><span>新密码(留空不改)：</span><input style="flex:1;min-width:160px" id="adminPassword" type="password"></div>
+      <div class="flex-row">
+        <button class="btn btn-gray btn-sm" onclick="exportConfig()">导出JSON</button>
+        <button class="btn btn-gray btn-sm" onclick="importConfig()">导入配置</button>
+      </div>
+      <textarea id="importBox" style="display:none;height:80px;" placeholder="粘贴旧版配置JSON"></textarea>
+      <button class="btn btn-primary btn-sm" id="importConfirm" style="display:none" onclick="doImport()">确认导入</button>
+    </details>
+    <div style="margin-top:14px;border-top:1px solid var(--line);padding-top:12px;">
+      <button class="btn btn-success" style="width:100%" onclick="saveConfig()">💾 保存全部设置（立即生效）</button>
+    </div>
+  </div>
+</div>
+<div id="toast"></div>
+
+<script>
+const typeList=[["血糖绝对值","血糖绝对值"],["delta(5min)","delta(5min)"],["shortAvgDelta(15min)","短平均增量(15min)"],["longAvgDelta(30min)","长平均增量(30min)"],["总IOB","总IOB"],["大剂量IOB","大剂量IOB"],["基础率IOB","基础率IOB"],["COB","剩余COB"],["最终预测BG","最终预测BG"],["手表电量","手表电量(%)"],["手表离线(分钟)","手表离线(分钟)"],["手表掉电(30分钟)","手表掉电(30分钟)%"],["充电状态","充电状态"],["血糖延迟(分钟)","血糖延迟(分钟)"],["泵延迟(分钟)","泵延迟(分钟)"],["泵状态异常","泵状态异常"],["泵药量(单位)","泵药量(单位)"]];
+const COND_HELP={"血糖绝对值":"当前血糖值(mmol/L或mg/dL)，如\"小于 4\"触发低血糖提醒","delta(5min)":"近5分钟血糖变化速率，负数=在下降，如\"小于 -1\"代表快速下降","shortAvgDelta(15min)":"近15分钟平均变化速率，过滤瞬时波动","longAvgDelta(30min)":"近30分钟平均变化速率，反映整体趋势","总IOB":"体内胰岛素活性总量(单位U)","大剂量IOB":"餐前大剂量剩余活性(单位U)","基础率IOB":"基础量剩余活性(单位U)","COB":"体内未消耗完的碳水(克g)","最终预测BG":"AAPS 对未来的预测血糖值","手表电量":"手表当前电量百分比，如\"小于 20\"提醒充电","手表离线(分钟)":"手表多久没上报数据，如\"大于 60\"可能已关机","手表掉电(30分钟)":"30分钟内电量下降幅度%，如\"大于 2\"提示充电断开","充电状态":"等于\"充电中\"或\"未充电\"，与掉电条件组合判断充电故障","血糖延迟(分钟)":"数据多久没更新，如\"大于 20\"说明手机/手表断连(NS断线)","泵延迟(分钟)":"泵数据多久没更新，如\"大于 30\"说明泵失联","泵状态异常":"泵上报状态不是正常时触发(选\"异常\")","泵药量(单位)":"药液剩余量U，如\"小于 20\"提醒换药"};
+const opList=[["大于",">"],["大于等于",">="],["等于","=="],["小于","<"],["小于等于","<="]];
+const opTxt={">":"大于",">=":"≥","==":"等于","<":"小于","<=":"≤"};
+const logicList=[["与","且"],["或","或"],["非","非"]];
+const weekTxt=["一","二","三","四","五","六","日"];
+const barkSounds=["alert","alarm","anticipate","bell","birdsong","default","none"];
+let configData=null;
+let expandedTaskKey=null;
+
+function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.style.display='block';setTimeout(()=>t.style.display='none',2500);}
+async function api(path,opts={}){const r=await fetch(path,Object.assign({headers:{'Content-Type':'application/json'}},opts));if(r.status===401){document.getElementById('loginMask').style.display='flex';throw new Error('未登录');}const j=await r.json().catch(()=>({}));return {status:r.status,json:j};}
+async function doLogin(){
+  const p=document.getElementById('loginPwd').value;
+  document.getElementById('loginErr').textContent='登录中...';
+  try{
+    const r=await fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:p})});
+    if(r.status===200){document.getElementById('loginMask').style.display='none';document.getElementById('loginErr').textContent='';boot();}
+    else if(r.status===401){document.getElementById('loginErr').textContent='密码错误，请检查大小写';}
+    else{document.getElementById('loginErr').textContent='登录失败: HTTP '+r.status;}
+  }catch(e){document.getElementById('loginErr').textContent='网络连接失败，请刷新重试';}
+}
+async function logout(){await api('/api/logout',{method:'POST'});location.reload();}
+function switchTab(name,btn){
+  document.querySelectorAll('.tabbtn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  document.querySelectorAll('.tabpane').forEach(p=>p.classList.add('hidden'));
+  document.getElementById('pane-'+name).classList.remove('hidden');
+}
+async function boot(){
+  try{await api('/api/status');}catch(e){return;}
+  await loadConfig();refreshStatus();loadEvents();
+  setInterval(refreshStatus,10000);setInterval(loadEvents,30000);
+}
+async function loadConfig(){
+  const r=await api('/api/config');configData=r.json;
+  if(!configData.ns_sources||!configData.ns_sources.length){
+    configData.ns_sources=configData.url?[{name:'默认',url:configData.url,secret:configData.secret||'',group:''}]:[];
+  }
+  document.getElementById('fetchInterval').value=configData.interval||60;
+  document.getElementById('unit').value=configData.unit||'mmol/L';
+  document.getElementById('instanceRole').value=configData.instance_role||'auto';
+  if(!configData.receivers)configData.receivers=(configData.default_receivers||[]).map(n=>({name:n,channels:['wechat'],bark_level:'timeSensitive'}));
+  if(!configData.receiver_groups)configData.receiver_groups=[];
+  renderTasks();renderReceivers();renderNsSources();
+}
+function renderNsSources(){
+  const srcs=configData.ns_sources||[];
+  document.getElementById('nsSrcList').innerHTML=srcs.map((s,i)=>`
+    <div class="task-editor">
+      <div class="flex-row"><span>名称:</span>
+        <input value="${s.name||''}" style="width:110px" placeholder="如:孩子手表" onchange="nsSrcSet(${i},'name',this.value.trim())">
+        <span>分组:</span><input value="${s.group||''}" style="width:100px" placeholder="如:家里" onchange="nsSrcSet(${i},'group',this.value.trim())">
+        <button class="btn btn-danger btn-sm" style="margin:0" onclick="delNsSource(${i})">✕</button></div>
+      <div class="flex-row"><span>地址:</span>
+        <input value="${s.url||''}" style="flex:1;min-width:150px" placeholder="https://xxx.ns.xxx" onchange="nsSrcSet(${i},'url',this.value.trim())"></div>
+      <div class="flex-row"><span>密钥:</span>
+        <input value="${s.secret||''}" style="flex:1;min-width:150px" placeholder="token或api-secret" onchange="nsSrcSet(${i},'secret',this.value.trim())"></div>
+    </div>`).join('')||'<p class="muted" style="padding:6px 0">暂无数据源，点下方添加。</p>';
+}
+function nsSrcSet(i,k,v){configData.ns_sources[i][k]=v;}
+function addNsSource(){configData.ns_sources=configData.ns_sources||[];configData.ns_sources.push({name:'数据源'+(configData.ns_sources.length+1),url:'',secret:'',group:''});renderNsSources();}
+function delNsSource(i){if(!confirm('删除该数据源？'))return;configData.ns_sources.splice(i,1);renderNsSources();}
+function collectConfig(){
+  const srcs=configData.ns_sources||[];
+  const first=srcs[0]||{};
+  return {
+    url:first.url||'',
+    secret:first.secret||'',
+    ns_sources:srcs,
+    interval:Number(document.getElementById('fetchInterval').value)||60,
+    unit:document.getElementById('unit').value,
+    instance_role:document.getElementById('instanceRole').value,
+    push_api_key:(configData.push_api_key||''),
+    default_receivers:(configData.default_receivers||[]),
+    receivers:(configData.receivers||[]),
+    receiver_groups:(configData.receiver_groups||[]),
+    push_server_url:(configData.push_server_url||''),
+    bark_keys:(configData.bark_keys||[]),
+    bark_server_url:(configData.bark_server_url||''),
+    admin_password:document.getElementById('adminPassword').value,
+    category_order:(configData.category_order||[]),
+    automation_tasks:configData.automation_tasks
+  };
+}
+async function saveConfig(){
+  const r=await api('/api/config',{method:'PUT',body:JSON.stringify(collectConfig())});
+  if(r.status===200){toast('✅ 已保存并立即生效');document.getElementById('adminPassword').value='';loadConfig();}
+  else toast('❌ 保存失败: '+(r.json.error||r.status));
+}
+async function exportConfig(){
+  const cfg=collectConfig();delete cfg.admin_password;
+  const blob=new Blob([JSON.stringify(cfg,null,2)],{type:'application/json'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='aaps-push-config.json';a.click();
+}
+function importConfig(){document.getElementById('importBox').style.display='block';document.getElementById('importConfirm').style.display='inline-block';}
+async function doImport(){
+  try{
+    const imported=JSON.parse(document.getElementById('importBox').value);
+    const r=await api('/api/config',{method:'PUT',body:JSON.stringify(imported)});
+    if(r.status===200){toast('✅ 导入成功');loadConfig();}
+  }catch(e){toast('❌ JSON解析失败');}
+}
+async function dryRun(){
+  const r=await api('/api/dry-run',{method:'POST',body:'{}'});
+  const box=document.getElementById('dryBox');box.style.display='block';box.open=true;
+  const out=document.getElementById('dryResult');
+  if(r.json.report)out.innerHTML='<b>🧪 模拟判定（不推送）</b><br>'+r.json.report.map(t=>
+    `${t.would_trigger?'🟢':'⚪'} <b>${t.name}</b> [${t.source||'-'}] 时间${t.time_ok?'✅':'❌'} 条件${t.conditions_ok?'✅':'❌'}`).join('<br>');
+  else out.innerHTML='❌ '+(r.json.error||'请求失败');
+}
+async function loadEvents(){
+  const r=await api('/api/events?limit=10');
+  document.getElementById('eventBody').innerHTML=(r.json||[]).map(e=>
+    `<tr><td style="white-space:nowrap">${e.ts.slice(5)}</td><td>${e.task}</td><td>${e.detail}</td></tr>`).join('')||'<tr><td colspan="3" class="muted">暂无事件</td></tr>';
+}
+async function refreshStatus(){
+  try{
+    const r=await api('/api/status');const s=r.json;
+    const badge=document.getElementById('roleBadge');
+    badge.textContent=s.is_leader?'主实例':'备实例';
+    badge.className='badge '+(s.is_leader?'leader':'standby');
+    document.getElementById('pwdWarn').style.display=s.password_is_default?'block':'none';
+    document.getElementById('bgNum').textContent=s.bg!==undefined&&s.bg!==null?s.bg:'--';
+    document.getElementById('bgUnit').textContent=s.unit||'';
+    document.getElementById('bgTrend').textContent=s.trend||'-';
+    document.getElementById('cDelta').textContent=s.delta;
+    document.getElementById('cShort').textContent=s.short_delta;
+    document.getElementById('cLong').textContent=s.long_delta;
+    document.getElementById('cIob').textContent=s.iob+'U';
+    document.getElementById('cCob').textContent=s.cob+'g';
+    document.getElementById('cFinal').textContent=(s.final_source==='无有效预测'||!s.final_value)?'-':s.final_value;
+    if(s.watch_battery!==null&&s.watch_battery!==undefined){
+      document.getElementById('chipWatch').style.display='block';
+      const chg=s.watch_charging?'⚡':'';
+      const off=(s.watch_offline_min!=null&&s.watch_offline_min>10)?' ('+s.watch_offline_min+'分前)':'';
+      document.getElementById('cWatch').textContent=Math.round(s.watch_battery)+'%'+chg+off;
+    }else{
+      document.getElementById('chipWatch').style.display='none';
+    }
+    if(s.basal_rate!==null&&s.basal_rate!==undefined){
+      document.getElementById('chipBasal').style.display='block';
+      document.getElementById('cBasal').textContent=s.basal_rate+'U/h';
+    }else document.getElementById('chipBasal').style.display='none';
+    if(s.reservoir!==null&&s.reservoir!==undefined){
+      document.getElementById('chipRes').style.display='block';
+      document.getElementById('cRes').textContent=Math.round(s.reservoir)+'U';
+    }else document.getElementById('chipRes').style.display='none';
+    const srcInfo=s.bg_source?(' · 来自:'+s.bg_source):'';
+    document.getElementById('statusMeta').textContent=`更新: ${s.data_time||'-'}${srcInfo} | ${s.leader_reason||''}`;
+  }catch(e){}
+}
+
+// ---------- 任务列表（极简：一行一任务，点设置展开） ----------
+function taskKey(t,i){return t.id||('idx'+i);}
+const BARK_LEVELS=[["active","常规"],["timeSensitive","时效性"],["passive","静默"],["critical","警告(持续响铃)"]];
+function hasBark(r){return (r.channels||[]).includes('bark');}
+function membersForTask(t){
+  const rs=configData.receivers||[];
+  let members=null;
+  if(t.receiver_group&&t.receiver_group!=='__all__'){
+    const gr=(configData.receiver_groups||[]).find(x=>x.name===t.receiver_group);
+    members=gr?gr.members:null;
+  }
+  if(members===null&&t.to_users&&t.to_users.length)members=t.to_users;
+  if(members===null)members=rs.map(r=>r.name);
+  return rs.filter(r=>members.includes(r.name));
+}
+function taskHasBark(t){return membersForTask(t).some(r=>hasBark(r));}
+async function saveTask(i,msg){
+  const t=configData.automation_tasks[i];
+  if(!t.name)return toast('请先填写任务名称');
+  const r=await api('/api/task-save',{method:'POST',body:JSON.stringify({task:t})});
+  if(r.status===200){t.id=r.json.id;expandedTaskKey=taskKey(t,i);toast(msg||'✅ 任务已单独保存');renderTasks();}
+  else toast('❌ 保存失败: '+(r.json.error||r.status));
+}
+async function toggleTaskEnabled(i,v){
+  configData.automation_tasks[i].enabled=v;
+  await saveTask(i,v?'✅ 任务已启用（立即生效）':'⏸ 任务已停用（立即生效，不再推送）');
+}
+function renderReceivers(){
+  const rs=configData.receivers||[];
+  document.getElementById('recvList').innerHTML=rs.map((r,i)=>{
+    const wx=(r.channels||[]).includes('wechat'), bk=hasBark(r);
+    return `
+    <div class="task-row">
+      <input value="${r.name}" style="width:90px;font-weight:600" onchange="recvSet(${i},'name',this.value.trim())">
+      <label style="display:flex;align-items:center;gap:4px"><input type="checkbox" ${wx?'checked':''} onchange="recvCh(${i},'wechat',this.checked)"> 微信</label>
+      <label style="display:flex;align-items:center;gap:4px"><input type="checkbox" ${bk?'checked':''} onchange="recvCh(${i},'bark',this.checked)"> Bark</label>
+      ${bk?`<select onchange="recvSet(${i},'bark_level',this.value)">${BARK_LEVELS.map(l=>`<option value="${l[0]}" ${((r.bark_level||'timeSensitive')===l[0])?'selected':''}>${l[1]}</option>`).join('')}</select>`:''}
+      <button class="btn btn-gray btn-sm" style="margin:0" onclick="testReceiver('${r.name}')">测试</button>
+      <button class="btn btn-primary btn-sm" style="margin:0" onclick="saveReceiver(${i})">💾 保存</button>
+      <button class="btn btn-danger btn-sm" style="margin:0" onclick="delReceiver(${i})">✕</button>
+    </div>
+    ${(wx||bk)?`<details class="recv-details"><summary>配置详情 ▾</summary>
+      ${wx?`<div class="recv-sub">
+        <span>微信接收人:</span><input value="${r.wechat_to||''}" placeholder="机器人给你的用户ID" style="width:130px" onchange="recvSet(${i},'wechat_to',this.value.trim())">
+        <span>微信Key:</span><input value="${r.wechat_key||''}" placeholder="机器人API Key" style="width:130px" onchange="recvSet(${i},'wechat_key',this.value.trim())">
+        <span>微信地址:</span><input value="${r.wechat_url||''}" placeholder="默认=设置页地址" style="flex:1;min-width:120px" onchange="recvSet(${i},'wechat_url',this.value.trim())">
+      </div>`:''}
+      ${bk?`<div class="recv-sub">
+        <span>Bark Key:</span><input value="${r.bark_key||''}" placeholder="Bark App里的Key" style="flex:1;min-width:130px" onchange="recvSet(${i},'bark_key',this.value.trim())">
+        <span>Bark地址:</span><input value="${r.bark_url||''}" placeholder="默认=设置页地址" style="flex:1;min-width:120px" onchange="recvSet(${i},'bark_url',this.value.trim())">
+      </div>`:''}
+    </details>`:''}`;
+  }).join('')||'<p class="muted" style="padding:8px 0">暂无接收者，先在下方添加。</p>';
+  const gs=configData.receiver_groups||[];
+  document.getElementById('groupList').innerHTML=gs.map((g,i)=>`
+    <div class="task-editor">
+      <div class="flex-row"><span>组名:</span>
+        <input value="${g.name}" style="flex:1;min-width:100px" onchange="groupSet(${i},'name',this.value)">
+        <button class="btn btn-danger btn-sm" style="margin:0" onclick="delGroup(${i})">✕ 删除</button></div>
+      <div class="flex-row">${rs.map(r=>`<label style="display:flex;align-items:center;gap:4px"><input type="checkbox" ${(g.members||[]).includes(r.name)?'checked':''} onchange="groupMember(${i},'${r.name}',this.checked)"> ${r.name}</label>`).join('')||'<span class="muted">先添加接收者</span>'}</div>
+    </div>`).join('')||'<p class="muted" style="padding:8px 0">暂无分组。任务里可选"全部接收者"或任一分组。</p>';
+}
+function recvCh(i,ch,on){const r=configData.receivers[i];const a=r.channels||[];const k=a.indexOf(ch);if(on&&k<0)a.push(ch);if(!on&&k>=0)a.splice(k,1);r.channels=a;renderReceivers();}
+function recvSet(i,k,v){
+  const r=configData.receivers[i];
+  if(k==='name'){
+    if(!v){toast('名称不能为空');renderReceivers();return;}
+    if(r._old_name===undefined)r._old_name=r.name;
+  }
+  r[k]=v;
+}
+function addReceiver(){const n=document.getElementById('newRecvName').value.trim();if(!n)return toast('请输入名称');if((configData.receivers||[]).some(r=>r.name===n))return toast('已存在同名接收者');configData.receivers.push({name:n,channels:['wechat'],bark_level:'timeSensitive',wechat_to:n,wechat_url:configData.push_server_url||'',bark_key:'',bark_url:configData.bark_server_url||''});document.getElementById('newRecvName').value='';renderReceivers();}
+function delReceiver(i){if(!confirm('删除接收者"'+configData.receivers[i].name+'"？'))return;configData.receivers.splice(i,1);renderReceivers();}
+async function groupSet(i,k,v){
+  const g=configData.receiver_groups[i];
+  if(k==='name'){
+    v=(v||'').trim();
+    if(!v){toast('组名不能为空');renderReceivers();return;}
+    if(v===g.name)return;
+    const old=g.name;
+    g.name=v;
+    // 级联：任务里存的 receiver_groups 引用旧组名，全部同步
+    (configData.automation_tasks||[]).forEach(t=>{
+      if(Array.isArray(t.receiver_groups)){
+        t.receiver_groups=t.receiver_groups.map(n=>n===old?v:n);
+      }else if(t.receiver_group===old){
+        t.receiver_group=v;
+      }
+    });
+    renderTasks();
+    await saveReceivers();
+    return;
+  }
+  g[k]=v;
+}
+function groupMember(i,name,on){const g=configData.receiver_groups[i];const k=g.members.indexOf(name);if(on&&k<0)g.members.push(name);if(!on&&k>=0)g.members.splice(k,1);}
+function addGroup(){const n=document.getElementById('newGroupName').value.trim();if(!n)return toast('请输入分组名');configData.receiver_groups=configData.receiver_groups||[];configData.receiver_groups.push({name:n,members:[]});document.getElementById('newGroupName').value='';renderReceivers();}
+function delGroup(i){if(!confirm('删除分组？'))return;configData.receiver_groups.splice(i,1);renderReceivers();}
+async function saveReceiver(i){
+  const rc=configData.receivers[i];
+  if(!rc.name)return toast('请先填写接收者名称');
+  const r=await api('/api/receiver-save',{method:'POST',body:JSON.stringify({receiver:rc,old_name:rc._old_name||rc.name})});
+  if(r.status===200){delete rc._old_name;toast('✅ 接收者已单独保存');loadConfig();}
+  else toast('❌ 保存失败: '+(r.json.error||r.status));
+}
+async function saveReceivers(){const r=await api('/api/config',{method:'PUT',body:JSON.stringify(collectConfig())});if(r.status===200)toast('✅ 接收者已保存');else toast('❌ 保存失败: '+(r.json.error||r.status));}
+async function testReceiver(name){const r=await api('/api/test-push',{method:'POST',body:JSON.stringify({receiver:name})});const ok=r.json.results&&r.json.results.every(x=>x.ok);toast((ok?'✅ ':'❌ ')+r.json.results.map(x=>x.channel+': '+x.detail).join(' | '));}
+function condText(c){
+  const hit=typeList.find(x=>x[0]===c.type);
+  const label=hit?hit[1]:c.type;
+  const val=c.type==='充电状态'?(c.value==1?'充电中':'未充电'):(c.value??'');
+  return `${label} ${opTxt[c.op]||c.op} ${val}`;
+}
+function condSummary(t){
+  const cs=t.conditions||[];
+  if(!cs.length)return '无条件（到间隔即提醒）';
+  return cs.map(condText).join(' '+(cs[0].logic||'与')+' ');
+}
+function timeSummary(t){
+  const tt=t.time_type||'none';
+  if(tt==='none')return '全天';
+  if(tt==='point')return '定点 '+(t.time_value||'');
+  let s='时段 '+(t.time_value||'');
+  const wds=(t.weekdays||[]).map((v,i)=>v?weekTxt[i]:null).filter(Boolean);
+  if(wds.length&&wds.length<7)s+=' · 周'+wds.join('');
+  return s;
+}
+function freqSummary(t){
+  const et=t.execution_type||'repeat';
+  if(et==='once')return '仅一次';
+  const sec=t.repeat_interval||300;
+  const m=sec%3600===0?sec/3600+'小时':sec%60===0?sec/60+'分钟':sec+'秒';
+  return '每'+m;
+}
+function toggleExpand(key){expandedTaskKey=(expandedTaskKey===key)?null:key;renderTasks();}
+
+function catOrder(){
+  // 渲染顺序：category_order 优先 → 新分类按首次出现追加 → 未分类固定最后
+  const ts=configData.automation_tasks||[];
+  const first=[],seen={};
+  ts.forEach(t=>{const c=t.category||'未分类';if(!seen[c]){seen[c]=1;first.push(c);}});
+  const co=(configData.category_order||[]).filter(c=>seen[c]&&c!=='未分类');
+  const rest=first.filter(c=>c!=='未分类'&&!co.includes(c));
+  const all=co.concat(rest);
+  if(seen['未分类'])all.push('未分类');
+  return all;
+}
+function catMap(){
+  const map={};
+  (configData.automation_tasks||[]).forEach((t,i)=>{
+    const c=t.category||'未分类';(map[c]=map[c]||[]).push(i);
+  });
+  return map;
+}
+function collapsedCats(){try{return JSON.parse(localStorage.getItem('aaps_collapsed_cats')||'[]');}catch(e){return [];}}
+function toggleCat(cat){
+  const a=collapsedCats();const k=a.indexOf(cat);
+  if(k<0)a.push(cat);else a.splice(k,1);
+  localStorage.setItem('aaps_collapsed_cats',JSON.stringify(a));
+  renderTasks();
+}
+function moveCat(cat,dir){
+  const co=(configData.category_order||[]).slice();
+  if(!co.includes(cat))co.push(cat);
+  const i=co.indexOf(cat),j=i+dir;
+  if(j<0||j>=co.length)return;
+  [co[i],co[j]]=[co[j],co[i]];
+  configData.category_order=co;
+  renderTasks();saveConfig();
+}
+
+function renderTasks(){
+  const w=document.getElementById('taskList');w.innerHTML='';
+  const ts=configData.automation_tasks||[];
+  if(!ts.length){w.innerHTML='<p class="muted" style="padding:10px 0">暂无任务，点上方按钮创建。</p>';return;}
+  const order=catOrder(),map=catMap(),collapsed=collapsedCats();
+  let num=0;
+  order.forEach(cat=>{
+    const esc=cat.replace(/'/g,"\\'");
+    const isUncat=cat==='未分类';
+    const isFold=collapsed.includes(cat);
+    const renBtn=isUncat?'':`<button class="btn btn-gray btn-sm" style="margin:0;padding:0 8px" onclick="event.stopPropagation();renameCategory('${esc}')">✏️</button>`;
+    const mvBtn=isUncat?'':`<button class="btn btn-gray btn-sm" style="margin:0;padding:0 5px" onclick="event.stopPropagation();moveCat('${esc}',-1)">▲</button><button class="btn btn-gray btn-sm" style="margin:0;padding:0 5px" onclick="event.stopPropagation();moveCat('${esc}',1)">▼</button>`;
+    w.innerHTML+=`<div class="cat-title" style="cursor:pointer" onclick="toggleCat('${esc}')">📂 ${isFold?'▸':'▾'} ${cat} ${renBtn}${mvBtn} <span class="muted" style="font-size:11px">${(map[cat]||[]).length}个任务</span></div>`;
+    if(isFold)return;
+    map[cat].forEach(i=>{
+      const t=ts[i],key=taskKey(t,i),en=t.enabled!==false;num++;
+      let html=`<div class="task-row">
+        <span class="task-num">${num}</span>
+        <label class="switch"><input type="checkbox" ${en?'checked':''} onchange="toggleTaskEnabled(${i},this.checked)"><span class="slider"></span></label>
+        <span class="task-name ${en?'':'off'}" onclick="toggleExpand('${key}')">${t.name||''}</span>
+        <button class="btn btn-gray btn-sm" style="margin:0" onclick="toggleExpand('${key}')">${expandedTaskKey===key?'收起 ▲':'⚙ 设置'}</button>
+        <button class="btn btn-danger btn-sm" style="margin:0" onclick="delTask(${i})">🗑</button>
+      </div>`;
+      if(expandedTaskKey===key)html+=buildEditor(t,i);
+      w.innerHTML+=html;
+    });
+  });
+}
+
+function buildEditor(t,i){
+  const po=t.push_options||{};
+  const wds=t.weekdays||[false,false,false,false,false,false,false];
+  let weeks='';for(let d=0;d<7;d++)weeks+=`<label style="margin-right:6px"><input type="checkbox" ${wds[d]?'checked':''} onchange="setWd(${i},${d},this.checked)">周${weekTxt[d]}</label>`;
+  const conds=(t.conditions||[]).map((c,ci)=>buildCond(c,i,ci)).join('');
+  const groups=(configData.receiver_groups||[]);
+  const barkOpt=taskHasBark(t)?`<div class="flex-row"><span>提醒音:</span>
+      <select onchange="tSet(${i},'push_options.bark_sound',this.value)">${barkSounds.map(s=>`<option ${((po.bark_sound||'alert')===s)?'selected':''}>${s}</option>`).join('')}</select></div>`:'';
+  return `<div class="task-editor">
+    <div class="flex-row"><span>名称：</span>
+      <input style="flex:1;min-width:140px" value="${t.name||''}" onchange="tSet(${i},'name',this.value)">
+      <button class="btn btn-primary btn-sm" style="margin:0" onclick="saveTask(${i})">💾 保存此任务</button></div>
+    <div class="flex-row"><span>分组：</span>
+      <select style="flex:1;min-width:140px" onchange="moveCatSel(${i},this.value)">
+        ${catOptions(i)}
+      </select>
+      <span class="muted">选中即移动并保存</span></div>
+    <div class="flex-row"><span>数据源：</span>
+      <select onchange="tSet(${i},'ns_source',this.value)">
+        ${(configData.ns_sources||[]).map(s=>`<option value="${s.name}" ${(t.ns_source||defaultSrc())===s.name?'selected':''}>${s.name}</option>`).join('')||'<option value="">未配置数据源</option>'}
+      </select>
+      <span class="muted">本任务用哪个 Nightscout 的数据判定与渲染</span></div>
+    <h3>触发条件</h3>
+    <div id="condBox${i}">${conds||'<p class="muted" style="margin:6px 0">无条件 = 到提醒间隔就推送</p>'}</div>
+    <button class="btn btn-gray btn-sm" onclick="addCond(${i})">➕ 加条件</button>
+    <h3>提醒频率</h3>
+    <div class="flex-row">
+      <select onchange="tSet(${i},'execution_type',this.value)">
+        <option value="repeat" ${(t.execution_type||'repeat')==='repeat'?'selected':''}>重复执行</option>
+        <option value="once" ${t.execution_type==='once'?'selected':''}>仅一次</option></select>
+      <span>间隔</span><input type="number" style="width:80px" value="${Math.round((t.repeat_interval||300)/60)}" onchange="tSet(${i},'repeat_interval',Number(this.value)*60)"><span>分钟</span>
+    </div>
+    <h3>生效时间</h3>
+    <div class="flex-row">
+      <select onchange="tSet(${i},'time_type',this.value)">
+        <option value="none" ${(t.time_type||'none')==='none'?'selected':''}>全天</option>
+        <option value="point" ${t.time_type==='point'?'selected':''}>定点</option>
+        <option value="range" ${t.time_type==='range'?'selected':''}>时间段</option></select>
+      <input placeholder="08:00 或 22:00-7:00" value="${t.time_value||''}" onchange="tSet(${i},'time_value',this.value)">
+    </div>
+    <div class="flex-row">${weeks}</div>
+    <h3>推送设置</h3>
+    <div class="flex-row"><b style="font-size:13px">接收者分组：</b>
+      ${groups.map(g=>`<label style="display:flex;align-items:center;gap:4px"><input type="checkbox" ${tGroups(i).includes(g.name)?'checked':''} onchange="tTarget(${i},'g','${g.name}',this.checked)"> ${g.name}</label>`).join('')||'<span class="muted">尚无分组，到"📇 接收者"页创建</span>'}</div>
+    <div class="flex-row"><b style="font-size:13px">指定接收者：</b>
+      ${(configData.receivers||[]).map(r=>`<label style="display:flex;align-items:center;gap:4px"><input type="checkbox" ${tNames(i).includes(r.name)?'checked':''} onchange="tTarget(${i},'n','${r.name}',this.checked)"> ${r.name}</label>`).join('')||'<span class="muted">尚无接收者，到"📇 接收者"页添加</span>'}</div>
+    <p class="muted" style="margin:4px 0">已选 ${tGroups(i).length+tNames(i).length}/10 项（分组+接收者合计）· 渠道与Bark级别在"📇 接收者"页配置 · 全不选=推给全部接收者</p>
+    ${barkOpt}
+    <div style="margin-top:6px"><span class="muted">消息模板，可用变量：</span>
+      <span class="muted">{当前血糖} {趋势} {5分钟增量} {总IOB} {剩余COB} {手表电量} {充电状态} {手表掉电} {基础率} {剩余药量} {泵状态} {血糖延迟} {泵延迟} {时间}</span></div>
+    <textarea style="height:90px;margin-top:6px" onchange="tSet(${i},'msg',this.value)">${t.msg||''}</textarea>
+  </div>`;
+}
+
+function tGroups(i){const t=configData.automation_tasks[i];if(!Array.isArray(t.receiver_groups))t.receiver_groups=(t.receiver_group&&t.receiver_group!=='__all__')?[t.receiver_group]:[];return t.receiver_groups;}
+function defaultSrc(){const s=configData.ns_sources||[];return s.length?(s[0].name||''):'';}
+function catOptions(i){
+  const cur=configData.automation_tasks[i].category||'未分类';
+  return catOrder().map(c=>`<option value="${c}" ${c===cur?'selected':''}>${c}</option>`).join('')
+    +'<option value="__new__">➕ 新建分类…</option>';
+}
+async function moveCatSel(i,v){
+  if(!v)return;
+  if(v==='__new__'){
+    const nv=prompt('新分类名称：');
+    if(nv===null)return;
+    if(!(nv||'').trim())return toast('分类名不能为空');
+    v=nv.trim();
+  }
+  configData.automation_tasks[i].category=(v==='未分类')?'':v;
+  await saveTask(i,'✅ 已移动到「'+(v==='未分类'?'未分类':v)+'」');
+}
+async function renameCategory(old){
+  const nv=prompt('把分类"'+old+'"重命名为：',old);
+  if(nv===null)return;
+  const nn=(nv||'').trim();
+  if(!nn)return toast('分类名不能为空');
+  if(nn===old)return;
+  (configData.automation_tasks||[]).forEach(t=>{
+    if((t.category||'未分类')===old)t.category=nn;
+  });
+  const co=configData.category_order||[];
+  const k=co.indexOf(old);if(k>=0)co[k]=nn;
+  configData.category_order=co;
+  renderTasks();
+  await saveConfig();
+}
+function tNames(i){const t=configData.automation_tasks[i];if(!Array.isArray(t.receiver_names))t.receiver_names=[];return t.receiver_names;}
+function tTarget(i,kind,name,on){
+  const arr=kind==='g'?tGroups(i):tNames(i);
+  const k=arr.indexOf(name);
+  if(on){if(k<0)arr.push(name);}else{if(k>=0)arr.splice(k,1);}
+  const total=tGroups(i).length+tNames(i).length;
+  if(total>10){const kk=arr.indexOf(name);if(on&&kk>=0)arr.splice(kk,1);toast('最多选择10项（分组+接收者合计）');}
+  renderTasks();
+}
+
+function buildCond(c,ti,ci){
+  const types=typeList.map(([v,n])=>`<option value="${v}" ${c.type===v?'selected':''}>${n}</option>`).join('');
+  const isEnum=(c.type==='充电状态'||c.type==='泵状态异常');
+  const ops=(isEnum?opList.filter(x=>x[1]==='=='):opList).map(([lbl,v])=>`<option value="${v}" ${c.op===v?'selected':''}>${lbl}</option>`).join('');
+  const logics=logicList.map(([v,n])=>`<option value="${v}" ${(c.logic||'与')===v?'selected':''}>${n}</option>`).join('');
+  let valCtl;
+  if(c.type==='充电状态'){
+    valCtl=`<select onchange="cSet(${ti},${ci},'value',Number(this.value))"><option value="1" ${c.value==1?'selected':''}>充电中</option><option value="0" ${c.value==0?'selected':''}>未充电</option></select>`;
+  }else if(c.type==='泵状态异常'){
+    valCtl=`<select onchange="cSet(${ti},${ci},'value',Number(this.value))"><option value="1" ${c.value==1?'selected':''}>异常</option><option value="0" ${c.value==0?'selected':''}>正常</option></select>`;
+  }else{
+    valCtl=`<input type="number" step="0.01" style="width:80px" value="${c.value??''}" onchange="cSet(${ti},${ci},'value',this.value===''?'':Number(this.value))">`;
+  }
+  const help=COND_HELP[c.type]||'';
+  return `<div class="cond-item" id="cond${ti}_${ci}">
+    <select onchange="cSet(${ti},${ci},'type',this.value)">${types}</select>
+    <select onchange="cSet(${ti},${ci},'op',this.value)">${ops}</select>
+    ${valCtl}
+    <select onchange="cSet(${ti},${ci},'logic',this.value)">${logics}</select>
+    <button class="btn btn-danger btn-sm" onclick="delCond(${ti},${ci})">✕</button>
+    ${help?`<div class="muted" style="width:100%;font-size:12px">💡 ${help}</div>`:''}</div>`;
+}
+
+function addNewTask(){
+  configData.automation_tasks.push({name:'新任务',category:'',ns_source:defaultSrc(),enabled:true,execution_type:'repeat',repeat_interval:300,time_type:'none',time_value:'',weekdays:[false,false,false,false,false,false,false],to_users:[],push_services:['wechat'],push_options:{bark_sound:'alert',bark_badge:1,bark_category:'reminder'},conditions:[],msg:'⚠️ 血糖提醒\n当前血糖: {当前血糖} mmol/L\n趋势: {趋势}\nIOB: {总IOB} COB: {剩余COB}\n时间: {时间}'});
+  expandedTaskKey=null;renderTasks();switchTab('tasks',document.querySelectorAll('.tabbtn')[1]);
+}
+function createWatchTasks(){
+  if(!confirm('将创建3个任务：\n1. 低电量预警：电量<20%，全天生效，间隔1小时\n2. 充电断开预警：充电状态==未充电 且 30分钟掉电>2%，22:00-7:00，间隔1小时\n3. 充电接触不良预警：充电状态==充电中 且 30分钟掉电>2%，22:00-7:00，间隔1小时\n\n创建后点"⚙设置"可调整，继续？'))return;
+  const wd=[false,false,false,false,false,false,false];
+  configData.automation_tasks.push({name:'低电量预警',enabled:true,execution_type:'repeat',repeat_interval:3600,time_type:'none',time_value:'',weekdays:wd.slice(),to_users:[],push_services:['wechat'],push_options:{bark_sound:'alarm',bark_badge:1,bark_category:'warning'},conditions:[{type:'手表电量',op:'<',value:20,logic:'与'}],msg:'🔋 低电量预警\n手表电量: {手表电量}%\n充电状态: {充电状态}\n请及时给孩子手表充电\n当前血糖: {当前血糖} {趋势}\n时间: {时间}'});
+  configData.automation_tasks.push({name:'充电断开预警',enabled:true,execution_type:'repeat',repeat_interval:3600,time_type:'range',time_value:'22:00-7:00',weekdays:wd.slice(),to_users:[],push_services:['wechat'],push_options:{bark_sound:'alarm',bark_badge:1,bark_category:'warning'},conditions:[{type:'充电状态',op:'==',value:0,logic:'与'},{type:'手表掉电(30分钟)',op:'>',value:2,logic:'与'}],msg:'⚠️ 充电断开预警\n充电状态: {充电状态}\n30分钟掉了{手表掉电}%\n手表可能被震离充电器，请检查\n时间: {时间}'});
+  configData.automation_tasks.push({name:'充电接触不良预警',enabled:true,execution_type:'repeat',repeat_interval:3600,time_type:'range',time_value:'22:00-7:00',weekdays:wd.slice(),to_users:[],push_services:['wechat'],push_options:{bark_sound:'alarm',bark_badge:1,bark_category:'warning'},conditions:[{type:'充电状态',op:'==',value:1,logic:'与'},{type:'手表掉电(30分钟)',op:'>',value:2,logic:'与'}],msg:'⚠️ 充电接触不良预警\n充电状态: {充电状态}\n30分钟掉了{手表掉电}%\n显示充电中但电量在下降，请重新放置手表\n时间: {时间}'});
+  renderTasks();toast('✅ 已添加3个任务，点"保存全部设置"生效');
+}
+function createOfflineTasks(){
+  if(!confirm('将创建3个断线报警任务：\n1. NS数据断线：血糖延迟>20分钟，全天生效，间隔1小时\n2. 泵失联：泵延迟>30分钟，全天生效，间隔1小时\n3. 泵停转/药量低：泵状态异常 或 药量<20U，全天生效，间隔1小时\n\n继续？'))return;
+  const wd=[false,false,false,false,false,false,false];
+  configData.automation_tasks.push({name:'NS数据断线',category:'系统',enabled:true,execution_type:'repeat',repeat_interval:3600,time_type:'none',time_value:'',weekdays:wd.slice(),to_users:[],push_services:['wechat'],push_options:{bark_sound:'alarm',bark_badge:1},conditions:[{type:'血糖延迟(分钟)',op:'>',value:20,logic:'与'}],msg:'🚨 NS数据断线报警\n血糖数据已 {血糖延迟} 分钟没有更新\n请检查 手机/手表/网络 是否在线\n时间: {时间}'});
+  configData.automation_tasks.push({name:'泵失联',category:'系统',enabled:true,execution_type:'repeat',repeat_interval:3600,time_type:'none',time_value:'',weekdays:wd.slice(),to_users:[],push_services:['wechat'],push_options:{bark_sound:'alarm',bark_badge:1},conditions:[{type:'泵延迟(分钟)',op:'>',value:30,logic:'与'}],msg:'🚨 泵失联报警\n泵数据已 {泵延迟} 分钟没有更新\n泵可能关机/断开蓝牙，请检查\n当前血糖: {当前血糖} {趋势}\n时间: {时间}'});
+  configData.automation_tasks.push({name:'泵停转/药量低',category:'系统',enabled:true,execution_type:'repeat',repeat_interval:3600,time_type:'none',time_value:'',weekdays:wd.slice(),to_users:[],push_services:['wechat'],push_options:{bark_sound:'alarm',bark_badge:1},conditions:[{type:'泵状态异常',op:'==',value:1,logic:'或'},{type:'泵药量(单位)',op:'<',value:20,logic:'或'}],msg:'🚨 泵异常报警\n泵状态: {泵状态} | 剩余药量: {剩余药量}U\n基础率: {基础率}U/h\n泵可能已停转或需要换药，请立即检查\n时间: {时间}'});
+  renderTasks();toast('✅ 已添加3个断线报警任务，点"保存全部设置"生效');
+}
+function delTask(i){if(!confirm('确定删除任务"' +(configData.automation_tasks[i].name||'')+ '"？'))return;configData.automation_tasks.splice(i,1);expandedTaskKey=null;renderTasks();}
+function tSet(i,k,v){if(k.includes('.')){const[a,b]=k.split('.');configData.automation_tasks[i][a]=configData.automation_tasks[i][a]||{};configData.automation_tasks[i][a][b]=v;}else configData.automation_tasks[i][k]=v;}
+function setWd(i,d,v){const w=configData.automation_tasks[i].weekdays||(configData.automation_tasks[i].weekdays=[false,false,false,false,false,false,false]);w[d]=v;}
+function addCond(i){
+  configData.automation_tasks[i].conditions.push({type:'血糖绝对值',op:'<',value:'',logic:'与'});
+  renderCondBox(i);
+}
+function delCond(ti,ci){configData.automation_tasks[ti].conditions.splice(ci,1);renderCondBox(ti);}
+function renderCondBox(i){
+  const box=document.getElementById('condBox'+i);
+  if(!box){renderTasks();return;}
+  const cs=configData.automation_tasks[i].conditions||[];
+  box.innerHTML=cs.map((c,ci)=>buildCond(c,i,ci)).join('')
+    ||'<p class="muted" style="margin:6px 0">无条件 = 到提醒间隔就推送</p>';
+}
+function cSet(ti,ci,k,v){
+  const c=configData.automation_tasks[ti].conditions[ci];
+  if(k==='value'){c.value=(v===''?'':Number(v));}
+  else{c[k]=v;}
+  if(k==='type'&&(v==='充电状态'||v==='泵状态异常')){
+    // 枚举类型只支持"等于"，取值重置为合法下拉值
+    if(c.op!=='==')c.op='==';
+    if(c.value!==0&&c.value!==1)c.value=1;
+  }
+  // 局部更新：只替换当前条件行，不重建整个列表（避免手机上原生下拉被销毁导致必须长按）
+  const el=document.getElementById('cond'+ti+'_'+ci);
+  if(el){el.outerHTML=buildCond(c,ti,ci);}
+  else{renderCondBox(ti);}
+}
+</script>
+</body>
+</html>

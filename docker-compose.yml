@@ -1,0 +1,13 @@
+services:
+  aaps-push:
+    build: .
+    image: aaps-push:1.0-beta
+    container_name: aaps-push
+    restart: unless-stopped
+    ports:
+      - "${PORT:-8300}:8300"
+    environment:
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-admin}
+      - TZ=Asia/Shanghai
+    volumes:
+      - ./data:/data
