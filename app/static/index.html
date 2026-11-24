@@ -425,11 +425,6 @@ function renderReceivers(){
         <span>Bark Key:</span><input value="${r.bark_key||''}" placeholder="Bark App里的Key" style="flex:1;min-width:130px" onchange="recvSet(${i},'bark_key',this.value.trim())">
         <span>Bark地址:</span><input value="${r.bark_url||''}" placeholder="默认=设置页地址" style="flex:1;min-width:120px" onchange="recvSet(${i},'bark_url',this.value.trim())">
       </div>`:''}
-      <div class="recv-sub">
-        <span>连发:</span><select onchange="recvSet(${i},'bark_repeat',Number(this.value))">${[1,2,3,4,5].map(n=>`<option value="${n}" ${((r.bark_repeat||1)===n)?'selected':''}>${n===1?'不连发（默认）':'连发'+n+'次'}</option>`).join('')}</select>
-        <span>间隔:</span><select onchange="recvSet(${i},'bark_repeat_gap',Number(this.value))" ${((r.bark_repeat||1)>1)?'':'disabled'}>${[1,2,3,4,5,6,7,8,9,10].map(s=>`<option value="${s}" ${((r.bark_repeat_gap||2)===s)?'selected':''}>${s}秒</option>`).join('')}</select>
-        <span class="muted" style="font-size:11px">不容易听见时选连发，微信/Bark 都生效</span>
-      </div>
     </details>`:''}`;
   }).join('')||'<p class="muted" style="padding:8px 0">暂无接收者，先在下方添加。</p>';
   const gs=configData.receiver_groups||[];
@@ -627,6 +622,10 @@ function buildEditor(t,i){
       ${(configData.receivers||[]).map(r=>`<label style="display:flex;align-items:center;gap:4px"><input type="checkbox" ${tNames(i).includes(r.name)?'checked':''} onchange="tTarget(${i},'n','${r.name}',this.checked)"> ${r.name}</label>`).join('')||'<span class="muted">尚无接收者，到"📇 接收者"页添加</span>'}</div>
     <p class="muted" style="margin:4px 0">已选 ${tGroups(i).length+tNames(i).length}/10 项（分组+接收者合计）· 渠道与Bark级别在"📇 接收者"页配置 · 全不选=推给全部接收者</p>
     ${barkOpt}
+    <div class="flex-row"><b style="font-size:13px">连发：</b>
+      <select onchange="tSet(${i},'push_repeat',Number(this.value))">${[1,2,3,4,5].map(n=>`<option value="${n}" ${((t.push_repeat||1)===n)?'selected':''}>${n===1?'不连发（默认）':'连发'+n+'次'}</option>`).join('')}</select>
+      <span>间隔</span><select onchange="tSet(${i},'push_gap',Number(this.value))" ${((t.push_repeat||1)>1)?'':'disabled'}>${[1,2,3,4,5,6,7,8,9,10].map(s=>`<option value="${s}" ${((t.push_gap||2)===s)?'selected':''}>${s}秒</option>`).join('')}</select>
+      <span class="muted" style="font-size:11px">不容易听见时选连发，微信/Bark 都生效</span></div>
     <div style="margin-top:6px"><span class="muted">消息模板，可用变量：</span>
       <span class="muted">{当前血糖} {趋势} {5分钟增量} {总IOB} {剩余COB} {手表电量} {充电状态} {手表掉电} {基础率} {剩余药量} {泵状态} {血糖延迟} {泵延迟} {时间}</span></div>
     <textarea style="height:90px;margin-top:6px" onchange="tSet(${i},'msg',this.value)">${t.msg||''}</textarea>

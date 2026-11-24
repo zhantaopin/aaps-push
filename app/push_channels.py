@@ -69,14 +69,14 @@ class BarkChannel:
             return False, "请求异常: %s" % e
 
 
-def _repeat_params(r):
-    """接收者连发参数：(次数, 间隔秒)。默认(1,2)=不连发；仅接收者显式设置连发次数>1才生效。"""
+def _repeat_params(task):
+    """任务级连发参数：(次数, 间隔秒)。默认(1,2)=不连发；仅任务显式设置 push_repeat>1 才生效。"""
     try:
-        repeat = min(max(int(r.get("bark_repeat") or 1), 1), 5)
+        repeat = min(max(int(task.get("push_repeat") or 1), 1), 5)
     except (TypeError, ValueError):
         repeat = 1
     try:
-        gap = min(max(int(r.get("bark_repeat_gap") or 2), 1), 10)
+        gap = min(max(int(task.get("push_gap") or 2), 1), 10)
     except (TypeError, ValueError):
         gap = 2
     return repeat, gap
@@ -154,30 +154,30 @@ def dispatch(task, message, config, db, task_name="测试", only_channel=None):
     results = []
     selected, bare = resolve_members(task, config)
 
-    # 微信目标：(收件人, 服务地址, API Key, 连发次数, 间隔秒)——各自字段缺省回退全局
+    # 任务级连发参数：对本任务的所有推送目标（微信+Bark）生效，默认不连发
+    repeat, gap = _repeat_params(task)
+
+    # 微信目标：(收件人, 服务地址, API Key)——各自字段缺省回退全局
     wx_targets = []
     for r in selected:
         if "wechat" in (r.get("channels") or []):
-            repeat, gap = _repeat_params(r)
             wx_targets.append((
                 r.get("wechat_to") or r["name"],
                 (r.get("wechat_url") or "").strip() or config.get("push_server_url"),
-                (r.get("wechat_key") or "").strip() or config.get("push_api_key"),
-                repeat, gap))
-    wx_targets += [(b, config.get("push_server_url"), config.get("push_api_key"), 1, 2)
-                   for b in bare]
+                (r.get("wechat_key") or "").strip() or config.get("push_api_key")))
+    wx_targets += [(b, config.get("push_server_url"), config.get("push_api_key")) for b in bare]
     bark_members = [r for r in selected if "bark" in (r.get("channels") or [])]
     bark_level = (task.get("push_options") or {}).get("bark_level") or \
         (_max_bark_level(bark_members) if bark_members else "timeSensitive")
 
     # 微信通道
     if only_channel in (None, "wechat"):
-        if not wx_targets or all(not k for _, _, k, _, _ in wx_targets):
+        if not wx_targets or all(not k for _, _, k in wx_targets):
             results.append({"channel": "wechat", "target": "-", "ok": False,
                             "detail": "微信推送未配置（接收者与全局均缺 API Key）"})
         else:
             ok_cnt = 0
-            for rcpt, url, key, repeat, gap in wx_targets:
+            for rcpt, url, key in wx_targets:
                 if not key:
                     results.append({"channel": "wechat", "target": rcpt, "ok": False,
                                     "detail": "缺少 API Key（接收者与全局均未配置）"})
@@ -192,15 +192,14 @@ def dispatch(task, message, config, db, task_name="测试", only_channel=None):
     # Bark 通道：按接收者各自的 bark_key/bark_url 发送（多设备各响各的），
     # 无独立 Key 回退全局 bark_keys，无独立地址回退全局 bark_server_url
     if only_channel in (None, "bark") and (bark_members or only_channel == "bark"):
-        bark_targets = []  # (key, url, repeat, gap)
+        bark_targets = []  # (key, url)
         for r in bark_members:
             k = (r.get("bark_key") or "").strip()
             u = (r.get("bark_url") or "").strip() or config.get("bark_server_url")
             if k and all(k != t[0] for t in bark_targets):
-                repeat, gap = _repeat_params(r)
-                bark_targets.append((k, u, repeat, gap))
+                bark_targets.append((k, u))
         if not bark_targets:
-            bark_targets = [(k, config.get("bark_server_url"), 1, 2)
+            bark_targets = [(k, config.get("bark_server_url"))
                             for k in (config.get("bark_keys") or [])]
         if not bark_targets:
             results.append({"channel": "bark", "target": "-", "ok": False,
@@ -209,7 +208,7 @@ def dispatch(task, message, config, db, task_name="测试", only_channel=None):
             ok_cnt = 0
             opts = dict(task.get("push_options") or {})
             opts["bark_level"] = bark_level
-            for key, url, repeat, gap in bark_targets:
+            for key, url in bark_targets:
                 ch = BarkChannel(url)
                 display = key[:10] + "..." + key[-5:] if len(key) > 15 else key
                 ok, detail, _ = _repeat_send(lambda: ch.send(key, message, opts), repeat, gap)
