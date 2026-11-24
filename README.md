@@ -53,7 +53,7 @@
 ### Docker 一键部署（推荐）
 
 ```bash
-git clone https://github.com/<你的用户名>/aaps-push.git
+git clone https://github.com/zhantaopin/aaps-push.git
 cd aaps-push
 ./deploy.sh                          # 默认端口 8300，默认密码 admin
 # 或自定义端口与密码：
@@ -241,7 +241,7 @@ cd .. && rm -rf aaps-push
 | 学习研究、慈善/教育/医疗公益组织 | ✅ 免费 |
 | 商业使用（出售、付费服务、企业内部商用） | ❌ 需事先联系作者获得**书面授权** |
 
-商用授权联系：<你的邮箱>（发布前替换）
+商用授权联系：GitHub: [@zhantaopin](https://github.com/zhantaopin)
 
 ---
 
