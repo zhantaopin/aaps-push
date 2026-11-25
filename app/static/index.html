@@ -75,7 +75,7 @@ table.events tr:last-child td{border-bottom:none;}
 .drag-handle{cursor:grab;color:#64748b;padding:2px 4px;font-size:16px;touch-action:none;user-select:none;-webkit-user-select:none;}
 .task-row.dragging{opacity:.45;pointer-events:none;}
 .task-row.drop-ok{outline:2px dashed #22a55f;outline-offset:-2px;}
-.task-row.drop-bad{outline:2px dashed #e5484d;outline-offset:-2px;}
+.task-row.drop-cat,.cat-title.drop-cat{outline:2px dashed #2f7ce0;outline-offset:-2px;}
 .cat-title{font-size:13px;font-weight:600;color:var(--blue);margin:14px 0 4px;padding-left:2px;}
 .cat-title:first-child{margin-top:4px;}
 .task-num{width:22px;height:22px;border-radius:50%;background:#eef2f7;color:var(--ink2);font-size:12px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
@@ -594,7 +594,7 @@ function renderTasks(){
     const isFold=collapsed.includes(cat);
     const renBtn=isUncat?'':`<button class="btn btn-gray btn-sm" style="margin:0;padding:0 8px" onclick="event.stopPropagation();renameCategory('${esc}')">✏️</button>`;
     const mvBtn=isUncat?'':`<button class="btn btn-gray btn-sm" style="margin:0;padding:0 5px" onclick="event.stopPropagation();moveCat('${esc}',-1)">▲</button><button class="btn btn-gray btn-sm" style="margin:0;padding:0 5px" onclick="event.stopPropagation();moveCat('${esc}',1)">▼</button>`;
-    w.innerHTML+=`<div class="cat-title" style="cursor:pointer" onclick="toggleCat('${esc}')">📂 ${isFold?'▸':'▾'} ${cat} ${renBtn}${mvBtn} <span class="muted" style="font-size:11px">${(map[cat]||[]).length}个任务</span></div>`;
+    w.innerHTML+=`<div class="cat-title" data-cat="${cat.replace(/"/g,'&quot;')}" style="cursor:pointer" onclick="toggleCat('${esc}')">📂 ${isFold?'▸':'▾'} ${cat} ${renBtn}${mvBtn} <span class="muted" style="font-size:11px">${(map[cat]||[]).length}个任务</span></div>`;
     if(isFold)return;
     map[cat].forEach(i=>{
       const t=ts[i],key=taskKey(t,i),en=t.enabled!==false;num++;
@@ -910,13 +910,13 @@ function createOfflineTasks(){
   renderTasks();toast('✅ 已添加3个断线报警任务，点"保存全部设置"生效');
 }
 function delTask(i){if(!confirm('确定删除任务"' +(configData.automation_tasks[i].name||'')+ '"？'))return;configData.automation_tasks.splice(i,1);expandedTaskKey=null;renderTasks();}
-/* ===== 任务分类内拖拽排序（≡ 手柄，桌面/手机统一 Pointer Events） ===== */
-const _dg={i:-1,el:null,started:false,x:0,y:0,target:-1};
+/* ===== 任务拖拽排序（≡ 手柄，桌面/手机统一 Pointer Events；支持跨分组=改归属） ===== */
+const _dg={i:-1,el:null,started:false,x:0,y:0,target:-1,targetCat:''};
 function spliceMove(from,to){const a=configData.automation_tasks;if(from===to||from<0||to<0||from>=a.length||to>=a.length)return;const t=a.splice(from,1)[0];a.splice(to,0,t);
   if(expandedTaskKey==='idx'+from)expandedTaskKey=taskKey(t,to); // idx 型展开键跟随被拖任务
 }
-function _dgClear(){document.querySelectorAll('.task-row.drop-ok,.task-row.drop-bad').forEach(r=>r.classList.remove('drop-ok','drop-bad'));_dg.target=-1;}
-function _dgReset(){if(_dg.el)_dg.el.classList.remove('dragging');_dg.el=null;_dg.i=-1;_dg.started=false;_dg.target=-1;}
+function _dgClear(){document.querySelectorAll('.task-row.drop-ok,.task-row.drop-cat,.cat-title.drop-cat').forEach(r=>r.classList.remove('drop-ok','drop-cat'));_dg.target=-1;_dg.targetCat='';}
+function _dgReset(){if(_dg.el)_dg.el.classList.remove('dragging');_dg.el=null;_dg.i=-1;_dg.started=false;_dg.target=-1;_dg.targetCat='';}
 function _dgDown(e){const h=e.target.closest('.drag-handle');if(!h)return;const row=h.closest('.task-row');
   _dg.i=+h.getAttribute('data-drag');_dg.el=row;_dg.started=false;_dg.x=e.clientX;_dg.y=e.clientY;
   try{h.setPointerCapture(e.pointerId);}catch(_){}}
@@ -924,25 +924,44 @@ function _dgMove(e){if(_dg.i<0)return;
   if(!_dg.started){if(Math.hypot(e.clientX-_dg.x,e.clientY-_dg.y)<6)return;_dg.started=true;_dg.el.classList.add('dragging');}
   _dgClear();
   const el=document.elementFromPoint(e.clientX,e.clientY);
-  const row=el&&el.closest?el.closest('.task-row'):null;
+  if(!el||!el.closest)return;
+  const title=el.closest('.cat-title');
+  if(title){const cat=title.getAttribute('data-cat')||'未分类';
+    if(cat!==(_catOf(_dg.i)||'未分类')){title.classList.add('drop-cat');_dg.targetCat=cat;}
+    return;}
+  const row=el.closest('.task-row');
   if(!row||row===_dg.el)return;
   const idx=getTaskIndex(row);
   if(idx<0||idx===_dg.i)return;
-  const a=configData.automation_tasks;
-  if((a[idx].category||'未分类')!==(a[_dg.i].category||'未分类')){row.classList.add('drop-bad');_dg.target=-1;}
-  else{row.classList.add('drop-ok');_dg.target=idx;}
+  if(_catOf(idx)===_catOf(_dg.i)){row.classList.add('drop-ok');}
+  else{row.classList.add('drop-cat');} // 跨组：落点合法，松手时改归属
+  _dg.target=idx;
 }
+function _catOf(i){const t=configData.automation_tasks[i];return t?(t.category||'未分类'):'未分类';}
 function getTaskIndex(row){ // 行序号 → automation_tasks 索引（跳过折叠分类不影响：行按 map 顺序渲染，data-drag 在手柄上）
   const h=row.querySelector('.drag-handle');return h?+h.getAttribute('data-drag'):-1;
 }
 function _dgUp(e){if(_dg.i<0)return;
   const cancel=e&&e.type==='pointercancel';
-  const from=_dg.i,to=_dg.target;
+  const from=_dg.i,to=_dg.target,tc=_dg.targetCat;
   if(_dg.started)_dg.el.classList.remove('dragging');
-  if(!cancel&&_dg.started&&to>=0&&to!==from){spliceMove(from,to);renderTasks();saveConfig();toast('✅ 已调整任务顺序');}
-  else if(!cancel&&_dg.started)toast('跨分类拖动无效，任务归属在编辑器里改分类');
+  if(!cancel&&_dg.started){
+    const a=configData.automation_tasks;
+    if(to>=0&&to!==from){ // 拖到任务行
+      const tcat=_catOf(to); // 先记录：splice 后索引会变
+      if(tcat!==_catOf(from)){a[from].category=tc2cat(tcat);spliceMove(from,to);renderTasks();saveConfig();toast('✅ 已移入「'+tcat+'」并排序');}
+      else{spliceMove(from,to);renderTasks();saveConfig();toast('✅ 已调整任务顺序');}
+    }else if(tc){ // 拖到分类标题：归入该组末尾
+      const t=a.splice(from,1)[0];t.category=tc2cat(tc);
+      let pos=a.length;for(let k=a.length-1;k>=0;k--){if(_catOf(k)===tc){pos=k+1;break;}}
+      a.splice(pos,0,t);
+      if(expandedTaskKey==='idx'+from)expandedTaskKey=taskKey(t,pos);
+      renderTasks();saveConfig();toast('✅ 已移入「'+tc+'」');
+    }
+  }
   _dgClear();_dgReset();
 }
+function tc2cat(cat){return cat==='未分类'?'':cat;} // 归属"未分类"=清空 category 字段
 document.addEventListener('pointerdown',_dgDown,true);
 document.addEventListener('pointermove',_dgMove,true);
 document.addEventListener('pointerup',_dgUp,true);

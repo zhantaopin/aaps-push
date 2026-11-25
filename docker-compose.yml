@@ -7,7 +7,7 @@ services:
     ports:
       - "${PORT:-8300}:8300"
     environment:
-      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-admin}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-}
       - TZ=Asia/Shanghai
     volumes:
       - ./data:/data

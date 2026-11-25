@@ -10,8 +10,10 @@ import argparse
 import logging
 import os
 import secrets
+import sys
 import time
 import uuid
+from datetime import timedelta
 from logging.handlers import RotatingFileHandler
 
 from flask import Flask, jsonify, request, session, send_from_directory
@@ -50,6 +52,10 @@ def create_app(scheduler, config_store, db, admin_password, secure_cookies=False
     app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
     # 更换 Cookie 名，避免与旧版(HTTPS时代)残留的 Secure Cookie 冲突
     app.config["SESSION_COOKIE_NAME"] = "aaps_push_session"
+    app.permanent_session_lifetime = timedelta(days=7)  # 会话 7 天有效
+
+    # 登录限速：同一 IP 连续失败 5 次锁定 10 分钟（内存计数，重启即清）
+    _login_fails = {}
 
     def authorized():
         return session.get("authed") is True
@@ -69,11 +75,23 @@ def create_app(scheduler, config_store, db, admin_password, secure_cookies=False
 
     @app.route("/api/login", methods=["POST"])
     def login():
+        ip = request.remote_addr or "?"
+        rec = _login_fails.get(ip)
+        if rec and rec[1] > time.time():
+            return jsonify({"ok": False, "error": "尝试过多，%d 秒后再试"
+                            % int(rec[1] - time.time())}), 429
         data = request.get_json(silent=True) or {}
         if data.get("password") == admin_password:
+            _login_fails.pop(ip, None)
             session["authed"] = True
             session.permanent = True
             return jsonify({"ok": True})
+        rec = _login_fails.setdefault(ip, [0, 0])
+        rec[0] += 1
+        if rec[0] >= 5:
+            rec[0] = 0
+            rec[1] = time.time() + 600
+            return jsonify({"ok": False, "error": "失败过多，已锁定 10 分钟"}), 429
         return jsonify({"ok": False, "error": "密码错误"}), 401
 
     @app.route("/api/logout", methods=["POST"])
@@ -293,9 +311,15 @@ def main():
     scheduler = Scheduler(config_store, db)
 
     admin_password = (os.environ.get("ADMIN_PASSWORD")
-                      or config_store.get().get("admin_password") or "admin")
-    if admin_password == "admin":
-        logging.warning("⚠️ 使用默认管理密码 admin，请尽快在管理台或环境变量中修改！")
+                      or config_store.get().get("admin_password") or "")
+    if not admin_password:
+        if os.environ.get("ALLOW_DEFAULT") == "1":  # 仅限本地开发
+            admin_password = "admin"
+            logging.warning("⚠️ ALLOW_DEFAULT=1 开发模式：使用默认密码 admin")
+        else:
+            logging.error("未设置管理密码：请通过环境变量 ADMIN_PASSWORD 配置"
+                          "（开发环境可用 ALLOW_DEFAULT=1）")
+            sys.exit(1)
 
     scheduler.start()
 
