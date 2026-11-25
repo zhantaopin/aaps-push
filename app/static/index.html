@@ -603,6 +603,7 @@ function buildEditor(t,i){
     <div class="flex-row"><span>名称：</span>
       <input style="flex:1;min-width:140px" value="${t.name||''}" onchange="tSet(${i},'name',this.value)">
       <button class="btn btn-gray btn-sm" style="margin:0" onclick="copyTaskJson(${i})">📤 复制JSON</button>
+      ${(splitGroups(t.conditions||[]).length>1)?`<button class="btn btn-gray btn-sm" style="margin:0" onclick="splitBranches(${i})">🔀 拆分分支</button>`:''}
       <button class="btn btn-primary btn-sm" style="margin:0" onclick="saveTask(${i})">💾 保存此任务</button></div>
     <div class="flex-row"><span>分组：</span>
       <select style="flex:1;min-width:140px" onchange="moveCatSel(${i},this.value)">
@@ -725,6 +726,29 @@ function buildCond(c,ti,ci,grpStart){
     ${help?`<div class="muted" style="width:100%;font-size:12px">💡 ${help}</div>`:''}</div>`;
 }
 
+async function splitBranches(i){
+  const t=configData.automation_tasks[i];
+  const gs=splitGroups(t.conditions||[]);
+  if(gs.length<2)return toast('该任务没有「或」分支可拆');
+  if(!confirm(`把「${t.name}」按 ${gs.length} 个分支拆成 ${gs.length} 个独立任务？\n拆分出的任务默认停用，继承分类/接收者/时间设置，你检查后逐个开启；原任务保持不变。`))return;
+  let made=0;
+  for(let k=0;k<gs.length;k++){
+    const g=gs[k];
+    const conds=t.conditions.slice(g.start,g.end).map((c,idx)=>Object.assign({},c,{logic:idx===0?'与':(c.logic==='非'?'非':'与')}));
+    const nt=Object.assign({},t);
+    delete nt.id;delete nt._st;
+    nt.name=`${t.name}-分支${k+1}`;
+    nt.enabled=false;
+    nt.conditions=conds;
+    const r=await api('/api/task-save',{method:'POST',body:JSON.stringify({task:nt})});
+    if(r.status!==200){toast(`❌ 分支${k+1} 保存失败: `+(r.json&&r.json.error||r.status));return;}
+    nt.id=r.json.id;
+    configData.automation_tasks.push(nt);
+    made++;
+  }
+  renderTasks();
+  toast(`✅ 已拆分 ${made} 个分支任务（默认停用），原任务保持不变。可在各任务里分别设置时间窗和消息后逐个开启`);
+}
 function copyTaskJson(i){
   const t=configData.automation_tasks[i];
   const s=JSON.stringify(t,null,2);
