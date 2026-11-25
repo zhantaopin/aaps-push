@@ -79,13 +79,15 @@ table.events tr:last-child td{border-bottom:none;}
 .task-name.off{color:#a8b3c0;text-decoration:line-through;}
 .task-editor{background:#f7fafc;border:1px solid var(--line);border-radius:12px;padding:12px;margin:10px 0 4px;}
 .cond-item{background:#fff;border:1px solid var(--line);padding:9px;border-radius:10px;margin:8px 0;display:flex;flex-wrap:wrap;gap:8px;align-items:center;}
-.cond-group{background:#f8fafd;border:1px solid var(--line);border-radius:12px;padding:4px 9px 9px;margin:8px 0;}
+.cond-tree{border-left:3px solid #c9d6ea;padding-left:6px;margin:6px 0;}
+.cond-tree-top{font-size:12px;font-weight:600;color:#5b7aa0;margin:2px 0 6px 10px;}
+.cond-group{background:#f8fafd;border:1px solid var(--line);border-radius:12px;padding:4px 9px 9px;margin:8px 0 8px 10px;}
 .cond-group-hd{display:flex;gap:8px;align-items:center;font-size:13px;margin-top:6px;}
 .cond-group.g0{border-left:4px solid #3b82f6;background:#f5f8ff;}
 .cond-group.g1{border-left:4px solid #10b981;background:#f2fbf6;}
 .cond-group.g2{border-left:4px solid #8b5cf6;background:#f8f5ff;}
 .cond-group.g3{border-left:4px solid #f59e0b;background:#fffaf0;}
-.or-badge{display:flex;gap:8px;align-items:center;justify-content:center;margin:4px 0;}
+.or-badge{display:flex;gap:8px;align-items:center;justify-content:center;margin:4px 0 4px 10px;}
 .or-badge>span{background:#f59e0b;color:#fff;font-size:12px;font-weight:700;padding:2px 14px;border-radius:999px;}
 .or-tag{background:#f59e0b;color:#fff;font-size:12px;font-weight:700;padding:3px 10px;border-radius:999px;white-space:nowrap;}
 .warn{background:#fff7e8;border:1px solid #ffd591;color:#ad5b00;padding:10px 14px;border-radius:10px;margin-bottom:10px;font-size:13px;}
@@ -593,7 +595,7 @@ function buildEditor(t,i){
   const po=t.push_options||{};
   const wds=t.weekdays||[false,false,false,false,false,false,false];
   let weeks='';for(let d=0;d<7;d++)weeks+=`<label style="margin-right:6px"><input type="checkbox" ${wds[d]?'checked':''} onchange="setWd(${i},${d},this.checked)">周${weekTxt[d]}</label>`;
-  const conds=(t.conditions||[]).map((c,ci)=>buildCond(c,i,ci)).join('');
+  const conds=condGroupsHtml(i);
   const groups=(configData.receiver_groups||[]);
   const barkOpt=taskHasBark(t)?`<div class="flex-row"><span>提醒音:</span>
       <select onchange="tSet(${i},'push_options.bark_sound',this.value)">${barkSounds.map(s=>`<option ${((po.bark_sound||'alert')===s)?'selected':''}>${s}</option>`).join('')}</select></div>`:'';
@@ -807,21 +809,24 @@ function delCond(ti,ci){
   if(!t.conditions.length)t.conditions=[];
   renderCondBox(ti);
 }
-function renderCondBox(i){
-  const box=document.getElementById('condBox'+i);
-  if(!box){renderTasks();return;}
+function condGroupsHtml(i){
   const cs=configData.automation_tasks[i].conditions||[];
-  if(!cs.length){box.innerHTML='<p class="muted" style="margin:6px 0">无条件 = 到提醒间隔就推送</p>';return;}
+  if(!cs.length)return '';
   const gs=splitGroups(cs);
-  let html='';
+  let html='<div class="cond-tree"><div class="cond-tree-top">▣ 满足以下任一组</div>';
   gs.forEach((g,gi)=>{
     if(gi>0)html+='<div class="or-badge"><span>或</span><button class="btn btn-gray btn-sm" onclick="addOrGroup('+i+')">＋或组</button></div>';
     html+=`<div class="cond-group g${gi%4}"><div class="cond-group-hd"><b>组 ${gi+1}</b><span class="muted">本组全部满足才触发</span></div>`;
     for(let ci=g.start;ci<g.end;ci++)html+=buildCond(cs[ci],i,ci,ci===g.start&&gi>0);
     html+=`<div style="margin-top:6px"><button class="btn btn-gray btn-sm" onclick="addCond(${i},${gi})">＋ 本组加条件</button></div></div>`;
   });
-  html+='<div class="or-badge"><button class="btn btn-gray btn-sm" onclick="addOrGroup('+i+')">＋ 添加或组</button></div>';
-  box.innerHTML=html;
+  html+='<div class="or-badge"><button class="btn btn-gray btn-sm" onclick="addOrGroup('+i+')">＋ 添加或组</button></div></div>';
+  return html;
+}
+function renderCondBox(i){
+  const box=document.getElementById('condBox'+i);
+  if(!box){renderTasks();return;}
+  box.innerHTML=condGroupsHtml(i)||'<p class="muted" style="margin:6px 0">无条件 = 到提醒间隔就推送</p>';
 }
 function cSet(ti,ci,k,v){
   const c=configData.automation_tasks[ti].conditions[ci];
