@@ -56,7 +56,9 @@ def create_app(scheduler, config_store, db, admin_password, secure_cookies=False
 
     @app.route("/")
     def index():
-        return send_from_directory(STATIC_DIR, "index.html")
+        resp = send_from_directory(STATIC_DIR, "index.html")
+        resp.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+        return resp
 
     @app.route("/api/health")
     def health():
