@@ -79,7 +79,15 @@ table.events tr:last-child td{border-bottom:none;}
 .task-name.off{color:#a8b3c0;text-decoration:line-through;}
 .task-editor{background:#f7fafc;border:1px solid var(--line);border-radius:12px;padding:12px;margin:10px 0 4px;}
 .cond-item{background:#fff;border:1px solid var(--line);padding:9px;border-radius:10px;margin:8px 0;display:flex;flex-wrap:wrap;gap:8px;align-items:center;}
-.cond-sep{margin:10px 0 2px;font-size:12px;font-weight:600;color:var(--blue);border-top:1px dashed var(--line);padding-top:8px;}
+.cond-group{background:#f8fafd;border:1px solid var(--line);border-radius:12px;padding:4px 9px 9px;margin:8px 0;}
+.cond-group-hd{display:flex;gap:8px;align-items:center;font-size:13px;margin-top:6px;}
+.cond-group.g0{border-left:4px solid #3b82f6;background:#f5f8ff;}
+.cond-group.g1{border-left:4px solid #10b981;background:#f2fbf6;}
+.cond-group.g2{border-left:4px solid #8b5cf6;background:#f8f5ff;}
+.cond-group.g3{border-left:4px solid #f59e0b;background:#fffaf0;}
+.or-badge{display:flex;gap:8px;align-items:center;justify-content:center;margin:4px 0;}
+.or-badge>span{background:#f59e0b;color:#fff;font-size:12px;font-weight:700;padding:2px 14px;border-radius:999px;}
+.or-tag{background:#f59e0b;color:#fff;font-size:12px;font-weight:700;padding:3px 10px;border-radius:999px;white-space:nowrap;}
 .warn{background:#fff7e8;border:1px solid #ffd591;color:#ad5b00;padding:10px 14px;border-radius:10px;margin-bottom:10px;font-size:13px;}
 .warn.ok{background:#effaf3;border-color:#b7e4c7;color:#1d7a45;}
 details{margin-top:8px;}
@@ -605,7 +613,7 @@ function buildEditor(t,i){
       </select>
       <span class="muted">本任务用哪个 Nightscout 的数据判定与渲染</span></div>
     <h3>触发条件</h3>
-    <p class="muted" style="margin:0 0 4px;font-size:12px">「或」把条件分成组：组内全部满足（且）、任一组满足（或）即触发</p>
+    <p class="muted" style="margin:0 0 4px;font-size:12px">彩色卡片=一组（组内「且」：全部满足），组间「或」：任一组满足即触发；「＋或组」添加新分组</p>
     <div id="condBox${i}">${conds||'<p class="muted" style="margin:6px 0">无条件 = 到提醒间隔就推送</p>'}</div>
     <button class="btn btn-gray btn-sm" onclick="addCond(${i})">➕ 加条件</button>
     <h3>提醒频率</h3>
@@ -684,11 +692,19 @@ function tTarget(i,kind,name,on){
   renderTasks();
 }
 
-function buildCond(c,ti,ci){
+function splitGroups(cs){
+  const gs=[];
+  cs.forEach((c,ci)=>{ if(gs.length===0||(c.logic||'与')==='或')gs.push({start:ci}); });
+  gs.forEach((g,k)=>{ g.end=(k<gs.length-1)?gs[k+1].start:cs.length; });
+  return gs;
+}
+function buildCond(c,ti,ci,grpStart){
   const types=typeList.map(([v,n])=>`<option value="${v}" ${c.type===v?'selected':''}>${n}</option>`).join('');
   const isEnum=(c.type==='充电状态'||c.type==='泵状态异常');
   const ops=(isEnum?opList.filter(x=>x[1]==='=='):opList).map(([lbl,v])=>`<option value="${v}" ${c.op===v?'selected':''}>${lbl}</option>`).join('');
-  const logics=logicList.map(([v,n])=>`<option value="${v}" ${(c.logic||'与')===v?'selected':''}>${n}</option>`).join('');
+  const logicCtl=grpStart
+    ?`<span class="or-tag">或</span>`
+    :`<select onchange="cSet(${ti},${ci},'logic',this.value)">${logicList.filter(x=>x[1]!=='或').map(([v,n])=>`<option value="${v}" ${(c.logic||'与')===v?'selected':''}>${n}</option>`).join('')}</select>`;
   let valCtl;
   if(c.type==='充电状态'){
     valCtl=`<select onchange="cSet(${ti},${ci},'value',Number(this.value))"><option value="1" ${c.value==1?'selected':''}>充电中</option><option value="0" ${c.value==0?'selected':''}>未充电</option></select>`;
@@ -698,12 +714,11 @@ function buildCond(c,ti,ci){
     valCtl=`<input type="number" step="0.01" style="width:80px" value="${c.value??''}" onchange="cSet(${ti},${ci},'value',this.value===''?'':Number(this.value))">`;
   }
   const help=COND_HELP[c.type]||'';
-  const sep=(ci>0&&(c.logic||'与')==='或')?'<div class="cond-sep">── 或 ──（上面一组全满足即触发）</div>':'';
-  return sep+`<div class="cond-item" id="cond${ti}_${ci}">
+  return `<div class="cond-item" id="cond${ti}_${ci}">
     <select onchange="cSet(${ti},${ci},'type',this.value)">${types}</select>
     <select onchange="cSet(${ti},${ci},'op',this.value)">${ops}</select>
     ${valCtl}
-    <select onchange="cSet(${ti},${ci},'logic',this.value)">${logics}</select>
+    ${logicCtl}
     <button class="btn btn-danger btn-sm" onclick="delCond(${ti},${ci})">✕</button>
     ${help?`<div class="muted" style="width:100%;font-size:12px">💡 ${help}</div>`:''}</div>`;
 }
@@ -771,17 +786,42 @@ function createOfflineTasks(){
 function delTask(i){if(!confirm('确定删除任务"' +(configData.automation_tasks[i].name||'')+ '"？'))return;configData.automation_tasks.splice(i,1);expandedTaskKey=null;renderTasks();}
 function tSet(i,k,v){if(k.includes('.')){const[a,b]=k.split('.');configData.automation_tasks[i][a]=configData.automation_tasks[i][a]||{};configData.automation_tasks[i][a][b]=v;}else configData.automation_tasks[i][k]=v;}
 function setWd(i,d,v){const w=configData.automation_tasks[i].weekdays||(configData.automation_tasks[i].weekdays=[false,false,false,false,false,false,false]);w[d]=v;}
-function addCond(i){
-  configData.automation_tasks[i].conditions.push({type:'血糖绝对值',op:'<',value:'',logic:'与'});
+function addCond(i,gIdx){
+  const cs=configData.automation_tasks[i].conditions||(configData.automation_tasks[i].conditions=[]);
+  const gs=splitGroups(cs);
+  const gi=(gIdx===undefined||gIdx===null||gIdx>=gs.length)?gs.length-1:gIdx;
+  const at=gs.length?gs[gi].end:cs.length;
+  cs.splice(at,0,{type:'血糖绝对值',op:'<',value:'',logic:'与'});
   renderCondBox(i);
 }
-function delCond(ti,ci){configData.automation_tasks[ti].conditions.splice(ci,1);renderCondBox(ti);}
+function addOrGroup(i){
+  const cs=configData.automation_tasks[i].conditions||(configData.automation_tasks[i].conditions=[]);
+  cs.push({type:'血糖绝对值',op:'<',value:'',logic:cs.length?'或':'与'});
+  renderCondBox(i);
+}
+function delCond(ti,ci){
+  const t=configData.automation_tasks[ti];
+  const wasStart=ci>0&&(t.conditions[ci].logic||'与')==='或';
+  t.conditions.splice(ci,1);
+  if(wasStart&&t.conditions[ci])t.conditions[ci].logic='或';  // 组起点被删，下一行接任组起点
+  if(!t.conditions.length)t.conditions=[];
+  renderCondBox(ti);
+}
 function renderCondBox(i){
   const box=document.getElementById('condBox'+i);
   if(!box){renderTasks();return;}
   const cs=configData.automation_tasks[i].conditions||[];
-  box.innerHTML=cs.map((c,ci)=>buildCond(c,i,ci)).join('')
-    ||'<p class="muted" style="margin:6px 0">无条件 = 到提醒间隔就推送</p>';
+  if(!cs.length){box.innerHTML='<p class="muted" style="margin:6px 0">无条件 = 到提醒间隔就推送</p>';return;}
+  const gs=splitGroups(cs);
+  let html='';
+  gs.forEach((g,gi)=>{
+    if(gi>0)html+='<div class="or-badge"><span>或</span><button class="btn btn-gray btn-sm" onclick="addOrGroup('+i+')">＋或组</button></div>';
+    html+=`<div class="cond-group g${gi%4}"><div class="cond-group-hd"><b>组 ${gi+1}</b><span class="muted">本组全部满足才触发</span></div>`;
+    for(let ci=g.start;ci<g.end;ci++)html+=buildCond(cs[ci],i,ci,ci===g.start&&gi>0);
+    html+=`<div style="margin-top:6px"><button class="btn btn-gray btn-sm" onclick="addCond(${i},${gi})">＋ 本组加条件</button></div></div>`;
+  });
+  html+='<div class="or-badge"><button class="btn btn-gray btn-sm" onclick="addOrGroup('+i+')">＋ 添加或组</button></div>';
+  box.innerHTML=html;
 }
 function cSet(ti,ci,k,v){
   const c=configData.automation_tasks[ti].conditions[ci];
@@ -794,7 +834,8 @@ function cSet(ti,ci,k,v){
   }
   // 局部更新：只替换当前条件行，不重建整个列表（避免手机上原生下拉被销毁导致必须长按）
   const el=document.getElementById('cond'+ti+'_'+ci);
-  if(el){el.outerHTML=buildCond(c,ti,ci);}
+  const grpStart=ci>0&&(c.logic||'与')==='或';
+  if(el){el.outerHTML=buildCond(c,ti,ci,grpStart);}
   else{renderCondBox(ti);}
 }
 </script>
