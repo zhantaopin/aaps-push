@@ -174,13 +174,14 @@ def _eval_cond(cond, fields):
 
 
 def evaluate_conditions(task, snap, now=None):
-    """分支组判断：组间"或"（全部组参与评估，不是选一个），组内"且"，
-    组级时间窗（时间段/星期几）不满足的组不参与触发。
+    """分支组判断：组间连接词 group_logic（或=任一组满足/且=全部组满足/异或=恰好一组满足，
+    对齐 AAPS And/Or/Xor），组内"且"，组级时间窗三态不满足的组不参与触发。
     返回 (是否满足, 原因说明, 命中组名列表[按组顺序])。"""
     fields = build_context(snap, None)["fields"]
     groups = effective_groups(task)
     if not groups:
         return True, "无分支(总是触发)", []
+    glogic = task.get("group_logic") or "或"
     toks, hit_names = [], []
     for g in groups:
         if now is not None:
@@ -199,7 +200,14 @@ def evaluate_conditions(task, snap, now=None):
         if group_ok:
             hit_names.append(g["name"])
         toks.append("[%s] %s" % (g["name"], " & ".join(parts)))
-    return bool(hit_names), " ‖ ".join(toks), hit_names
+    if glogic == "且":
+        ok = len(hit_names) == len(groups)
+    elif glogic == "异或":
+        ok = len(hit_names) == 1
+    else:
+        ok = bool(hit_names)
+    head = "组间[%s] " % glogic if len(groups) > 1 else ""
+    return ok, head + " ‖ ".join(toks), hit_names
 
 
 def evaluate_window(tg_type, tg_value, weekdays, now):

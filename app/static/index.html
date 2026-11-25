@@ -64,7 +64,13 @@ table.events th{background:#f5f8fb;color:var(--ink2);font-weight:500;}
 table.events th,table.events td{border-bottom:1px solid var(--line);padding:8px 6px;text-align:left;word-break:break-all;}
 table.events tr:last-child td{border-bottom:none;}
 /* ===== 任务列表 ===== */
-.task-row{display:flex;align-items:center;gap:10px;padding:12px 4px;border-bottom:1px solid var(--line);}
+.task-row{display:flex;align-items:center;gap:10px;padding:12px 4px 12px 8px;border-bottom:1px solid var(--line);border-left:5px solid transparent;}
+.task-row.t0{border-left-color:#2563eb;}
+.task-row.t1{border-left-color:#059669;}
+.task-row.t2{border-left-color:#7c3aed;}
+.task-row.t3{border-left-color:#d97706;}
+.tdot{width:9px;height:9px;border-radius:50%;flex-shrink:0;}
+.tdot.t0{background:#2563eb;}.tdot.t1{background:#059669;}.tdot.t2{background:#7c3aed;}.tdot.t3{background:#d97706;}
 .task-row:last-child{border-bottom:none;}
 .cat-title{font-size:13px;font-weight:600;color:var(--blue);margin:14px 0 4px;padding-left:2px;}
 .cat-title:first-child{margin-top:4px;}
@@ -83,10 +89,10 @@ table.events tr:last-child td{border-bottom:none;}
 .cond-tree-top{font-size:12px;font-weight:600;color:#5b7aa0;margin:2px 0 6px 10px;}
 .cond-group{background:#f8fafd;border:1px solid var(--line);border-radius:12px;padding:4px 9px 9px;margin:8px 0 8px 10px;}
 .cond-group-hd{display:flex;gap:8px;align-items:center;font-size:13px;margin-top:6px;}
-.cond-group.g0{border-left:4px solid #3b82f6;background:#f5f8ff;}
-.cond-group.g1{border-left:4px solid #10b981;background:#f2fbf6;}
-.cond-group.g2{border-left:4px solid #8b5cf6;background:#f8f5ff;}
-.cond-group.g3{border-left:4px solid #f59e0b;background:#fffaf0;}
+.cond-group.g0{border-left:5px solid #2563eb;background:#e8f0fe;}
+.cond-group.g1{border-left:5px solid #059669;background:#dcfaee;}
+.cond-group.g2{border-left:5px solid #7c3aed;background:#f0e9fe;}
+.cond-group.g3{border-left:5px solid #d97706;background:#fef3df;}
 .or-badge{display:flex;gap:8px;align-items:center;justify-content:center;margin:4px 0 4px 10px;}
 .or-badge>span{background:#f59e0b;color:#fff;font-size:12px;font-weight:700;padding:2px 14px;border-radius:999px;}
 .or-tag{background:#f59e0b;color:#fff;font-size:12px;font-weight:700;padding:3px 10px;border-radius:999px;white-space:nowrap;}
@@ -578,8 +584,10 @@ function renderTasks(){
     if(isFold)return;
     map[cat].forEach(i=>{
       const t=ts[i],key=taskKey(t,i),en=t.enabled!==false;num++;
-      let html=`<div class="task-row">
+      const tc='t'+((num-1)%4);
+      let html=`<div class="task-row ${tc}">
         <span class="task-num">${num}</span>
+        <span class="tdot ${tc}"></span>
         <label class="switch"><input type="checkbox" ${en?'checked':''} onchange="toggleTaskEnabled(${i},this.checked)"><span class="slider"></span></label>
         <span class="task-name ${en?'':'off'}" onclick="toggleExpand('${key}')">${t.name||''}</span>
         <button class="btn btn-gray btn-sm" style="margin:0" onclick="toggleExpand('${key}')">${expandedTaskKey===key?'收起 ▲':'⚙ 设置'}</button>
@@ -599,6 +607,17 @@ function buildEditor(t,i){
   const groups=(configData.receiver_groups||[]);
   const barkOpt=taskHasBark(t)?`<div class="flex-row"><span>提醒音:</span>
       <select onchange="tSet(${i},'push_options.bark_sound',this.value)">${barkSounds.map(s=>`<option ${((po.bark_sound||'alert')===s)?'selected':''}>${s}</option>`).join('')}</select></div>`:'';
+  const ttt=t.time_type||'none';
+  let tvCtl='';
+  if(ttt==='point')tvCtl=`<select onchange="tSet(${i},'time_value',this.value)">${timeOpts(t.time_value)}</select><span class="muted">每日到点触发一次</span>`;
+  else if(ttt==='range'){const pv=String(t.time_value||'22:00-7:00').split('-');tvCtl=`<select onchange="tvSet(${i},'s',this.value)">${timeOpts(pv[0])}</select><span style="font-size:13px">~</span><select onchange="tvSet(${i},'e',this.value)">${timeOpts(pv[1]||'07:00')}</select><span class="muted">可跨夜</span>`;}
+  else tvCtl=`<span class="muted">不设时间 = 按检测周期和提醒间隔循环检查</span>`;
+  const gLogic=(ensureGroups(i).length>1)?`<div class="flex-row"><span><b style="font-size:13px">组间关系：</b></span>
+      <select onchange="gLogicSet(${i},this.value)">
+        <option value="或" ${((t.group_logic)||'或')==='或'?'selected':''}>或（任一组满足即触发）</option>
+        <option value="且" ${t.group_logic==='且'?'selected':''}>且（所有组都满足才触发）</option>
+        <option value="异或" ${t.group_logic==='异或'?'selected':''}>异或（恰好一组满足）</option></select>
+      <span class="muted">对应 AAPS 的 Or / And / Xor</span></div>`:'';
   return `<div class="task-editor">
     <div class="flex-row"><span>名称：</span>
       <input style="flex:1;min-width:140px" value="${t.name||''}" onchange="tSet(${i},'name',this.value)">
@@ -616,7 +635,8 @@ function buildEditor(t,i){
       </select>
       <span class="muted">本任务用哪个 Nightscout 的数据判定与渲染</span></div>
     <h3>触发条件</h3>
-    <p class="muted" style="margin:0 0 4px;font-size:12px">彩色卡片=分支组：组内「且」全部满足，组间「或」任一组满足即触发一次。每组可命名、设生效时间（全天/时间段/定点，定点每日最多一次）、星期几、写本组专属消息（留空用任务统一消息）；消息里可用 {%组名%}</p>
+    <p class="muted" style="margin:0 0 4px;font-size:12px">彩色卡片=分支组：组内「且」全部满足，组间关系可选「或/且/异或」（见下方下拉）。每组可命名、设生效时间（不设时间=按间隔循环 / 时间段 / 定点，定点每日最多一次）、星期几、写本组专属消息（留空用任务统一消息）；消息里可用 {%组名%}</p>
+    ${gLogic}
     <div id="condBox${i}">${conds||'<p class="muted" style="margin:6px 0">无条件 = 到提醒间隔就推送</p>'}</div>
     <button class="btn btn-gray btn-sm" onclick="addCond(${i})">➕ 加条件</button>
     <h3>提醒频率</h3>
@@ -628,11 +648,11 @@ function buildEditor(t,i){
     </div>
     <h3>生效时间</h3>
     <div class="flex-row">
-      <select onchange="tSet(${i},'time_type',this.value)">
-        <option value="none" ${(t.time_type||'none')==='none'?'selected':''}>全天</option>
-        <option value="point" ${t.time_type==='point'?'selected':''}>定点</option>
-        <option value="range" ${t.time_type==='range'?'selected':''}>时间段</option></select>
-      <input placeholder="08:00 或 22:00-7:00" value="${t.time_value||''}" onchange="tSet(${i},'time_value',this.value)">
+      <select onchange="tSetTt(${i},this.value)">
+        <option value="none" ${ttt==='none'?'selected':''}>⏰ 不设时间</option>
+        <option value="point" ${ttt==='point'?'selected':''}>⏰ 定时</option>
+        <option value="range" ${ttt==='range'?'selected':''}>⏰ 时间段</option></select>
+      ${tvCtl}
     </div>
     <div class="flex-row">${weeks}</div>
     <h3>推送设置</h3>
@@ -838,6 +858,13 @@ function createOfflineTasks(){
 }
 function delTask(i){if(!confirm('确定删除任务"' +(configData.automation_tasks[i].name||'')+ '"？'))return;configData.automation_tasks.splice(i,1);expandedTaskKey=null;renderTasks();}
 function tSet(i,k,v){if(k.includes('.')){const[a,b]=k.split('.');configData.automation_tasks[i][a]=configData.automation_tasks[i][a]||{};configData.automation_tasks[i][a][b]=v;}else configData.automation_tasks[i][k]=v;}
+function normT(t){t=String(t||'').trim();const m=t.match(/(\d{1,2}):?(\d{2})?/);if(!m)return '00:00';const h=Math.min(23,Math.max(0,parseInt(m[1])));const mi=m[2]?parseInt(m[2]):0;return String(h).padStart(2,'0')+':'+(mi<30?'00':'30');}
+function timeOpts(cur){let h='';for(let k=0;k<48;k++){const t=String(Math.floor(k/2)).padStart(2,'0')+':'+(k%2?'30':'00');h+='<option value="'+t+'" '+(t===normT(cur)?'selected':'')+'>'+t+'</option>';}return h;}
+function tvSet(i,part,v){const t=configData.automation_tasks[i];const cur=String(t.time_value||'22:00-7:00');const p=cur.includes('-')?cur.split('-'):[cur,'07:00'];if(part==='s')p[0]=v;else p[1]=v;t.time_value=p[0]+'-'+p[1];}
+function gSetT(i,gi,part,v){const g=ensureGroups(i)[gi];if(!g)return;const cur=String(g.tg_value||g.time_value||'22:00-7:00');const p=cur.includes('-')?cur.split('-'):[cur,'07:00'];if(part==='s')p[0]=v;else p[1]=v;g.tg_value=p[0]+'-'+p[1];}
+function tSetTt(i,v){tSet(i,'time_type',v);renderTasks();}
+function gSetTg(i,gi,v){gSet(i,gi,'tg_type',v);renderCondBox(i);}
+function gLogicSet(i,v){tSet(i,'group_logic',v);renderCondBox(i);}
 function setWd(i,d,v){const w=configData.automation_tasks[i].weekdays||(configData.automation_tasks[i].weekdays=[false,false,false,false,false,false,false]);w[d]=v;}
 function gSet(ti,gi,k,v){const g=ensureGroups(ti)[gi];if(g)g[k]=v;}
 function setWdG(ti,gi,d,v){const g=ensureGroups(ti)[gi];if(!g)return;if(!Array.isArray(g.weekdays))g.weekdays=[];g.weekdays[d]=v;}
@@ -845,13 +872,13 @@ function toggleGMsg(ti,gi){const el=document.getElementById('gmsg'+ti+'_'+gi);if
 function addCond(i,gi){
   const gs=ensureGroups(i);
   const gi2=(gi===undefined||gi===null||gi>=gs.length)?gs.length-1:gi;
-  if(gi2<0){gs.push({name:'组1',time_value:'',weekdays:[],msg:'',conds:[{type:'血糖绝对值',op:'<',value:'',logic:'与'}]});}
+  if(gi2<0){gs.push({name:'组1',tg_type:'none',tg_value:'',time_value:'',weekdays:[],msg:'',conds:[{type:'血糖绝对值',op:'<',value:'',logic:'与'}]});}
   else gs[gi2].conds.push({type:'血糖绝对值',op:'<',value:'',logic:'与'});
   renderCondBox(i);
 }
 function addOrGroup(i){
   const gs=ensureGroups(i);
-  gs.push({name:'组'+(gs.length+1),time_value:'',weekdays:[],msg:'',conds:[{type:'血糖绝对值',op:'<',value:'',logic:'与'}]});
+  gs.push({name:'组'+(gs.length+1),tg_type:'none',tg_value:'',time_value:'',weekdays:[],msg:'',conds:[{type:'血糖绝对值',op:'<',value:'',logic:'与'}]});
   renderCondBox(i);
 }
 function delGroup(ti,gi){
@@ -869,23 +896,26 @@ function delCond(ti,gi,ci){
 function condGroupsHtml(i){
   const gs=ensureGroups(i);
   if(!gs.length)return '';
-  let html='<div class="cond-tree"><div class="cond-tree-top">▣ 满足以下任一组</div>';
+  const gl=(configData.automation_tasks[i].group_logic)||'或';
+  let html=`<div class="cond-tree"><div class="cond-tree-top">▣ 组间「${gl}」（多组时生效，在上方「组间关系」切换）</div>`;
   gs.forEach((g,gi)=>{
-    if(gi>0)html+='<div class="or-badge"><span>或</span></div>';
+    if(gi>0)html+=`<div class="or-badge"><span>${gl}</span></div>`;
     const wd=(g.weekdays||[]).map(Boolean);
     const tt=g.tg_type||(g.time_value?'range':'none');
     const tv=(g.tg_value!=null&&g.tg_value!=='')?g.tg_value:(g.time_value||'');
-    const ph={none:'全天生效',range:'如 22:00-7:00，可跨夜',point:'如 9:00，每日最多一次'}[tt]||'';
+    let tCtl='';
+    if(tt==='point')tCtl=`<select onchange="gSet(${i},${gi},'tg_value',this.value)">${timeOpts(tv)}</select>`;
+    else if(tt==='range'){const pv=String(tv||'22:00-7:00').split('-');tCtl=`<select onchange="gSetT(${i},${gi},'s',this.value)">${timeOpts(pv[0])}</select><span style="font-size:12px">~</span><select onchange="gSetT(${i},${gi},'e',this.value)">${timeOpts(pv[1]||'07:00')}</select>`;}
     html+=`<div class="cond-group g${gi%4}"><div class="cond-group-hd">
       <span class="or-tag">组${gi+1}</span>
       <input style="flex:1;min-width:100px;font-size:13px" placeholder="组名（如：夜间严重）" value="${(g.name||'').replace(/"/g,'&quot;')}" onchange="gSet(${i},${gi},'name',this.value)">
       <button class="btn btn-danger btn-sm" style="margin:0" onclick="delGroup(${i},${gi})">🗑</button></div>
       <div class="cond-group-hd">
-      <select style="flex:none" onchange="gSet(${i},${gi},'tg_type',this.value)">
-        <option value="none" ${tt==='none'?'selected':''}>⏰ 全天</option>
+      <select style="flex:none" onchange="gSetTg(${i},${gi},this.value)">
+        <option value="none" ${tt==='none'?'selected':''}>⏰ 不设时间</option>
         <option value="range" ${tt==='range'?'selected':''}>⏰ 时间段</option>
-        <option value="point" ${tt==='point'?'selected':''}>⏰ 定点</option></select>
-      <input style="flex:1;min-width:90px;font-size:13px" placeholder="${ph}" value="${String(tv).replace(/"/g,'&quot;')}" onchange="gSet(${i},${gi},'tg_value',this.value)">
+        <option value="point" ${tt==='point'?'selected':''}>⏰ 定时</option></select>
+      ${tCtl||(tt==='none'?'<span class="muted" style="font-size:11px">按间隔循环检查</span>':'')}
       <span class="muted" style="font-size:11px">${[0,1,2,3,4,5,6].map(d=>`<label style="margin:0 2px"><input type="checkbox" ${wd[d]?'checked':''} onchange="setWdG(${i},${gi},${d},this.checked)">${weekTxt[d]}</label>`).join('')}</span></div>
       <div class="cond-group-hd"><a href="javascript:void(0)" class="muted" style="font-size:12px" onclick="toggleGMsg(${i},${gi})">💬 本组消息 ▾</a></div>
       <textarea id="gmsg${i}_${gi}" style="display:none;height:70px;margin:4px 0" placeholder="留空=用任务统一消息；可用 {%组名%} 及其他变量" onchange="gSet(${i},${gi},'msg',this.value)">${(g.msg||'').replace(/</g,'&lt;')}</textarea>`;
