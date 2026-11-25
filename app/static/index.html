@@ -600,6 +600,8 @@ function renderTasks(){
         <span class="tdot ${tc}"></span>
         <label class="switch"><input type="checkbox" ${en?'checked':''} onchange="toggleTaskEnabled(${i},this.checked)"><span class="slider"></span></label>
         <span class="task-name ${en?'':'off'}" onclick="toggleExpand('${key}')">${t.name||''}</span>
+        <button class="btn btn-gray btn-sm" style="margin:0;padding:0 7px" ${i===0?'disabled':''} onclick="taskMove(${i},-1)">↑</button>
+        <button class="btn btn-gray btn-sm" style="margin:0;padding:0 7px" ${i===ts.length-1?'disabled':''} onclick="taskMove(${i},1)">↓</button>
         <button class="btn btn-gray btn-sm" style="margin:0" onclick="toggleExpand('${key}')">${expandedTaskKey===key?'收起 ▲':'⚙ 设置'}</button>
         <button class="btn btn-danger btn-sm" style="margin:0" onclick="delTask(${i})">🗑</button>
       </div>`;
@@ -764,8 +766,8 @@ function buildCond(c,ti,gi,ci){
     const tt=c.tg_type||'none';
     const wd=(c.weekdays||[]);
     let tCtl='';
-    if(tt==='point')tCtl=`<select onchange="cSet(${ti},${gi},${ci},'tg_value',this.value)">${timeOpts(c.tg_value)}</select>`;
-    else if(tt==='range'){const pv=String(c.tg_value||'22:00-7:00').split('-');tCtl=`<select onchange="cSetT2(${ti},${gi},${ci},'s',this.value)">${timeOpts(pv[0])}</select><span style="font-size:12px">~</span><select onchange="cSetT2(${ti},${gi},${ci},'e',this.value)">${timeOpts(pv[1]||'07:00')}</select>`;}
+    if(tt==='point')tCtl=`<select id="time${ti}_${gi}_${ci}" onchange="tPick(${ti},${gi},${ci},null,this.value)">${timeOpts(c.tg_value)}</select>`;
+    else if(tt==='range'){const pv=String(c.tg_value||'22:00-7:00').split('-');tCtl=`<select id="time${ti}_${gi}_${ci}_s" onchange="tPick(${ti},${gi},${ci},'s',this.value)">${timeOpts(pv[0])}</select><span style="font-size:12px">~</span><select id="time${ti}_${gi}_${ci}_e" onchange="tPick(${ti},${gi},${ci},'e',this.value)">${timeOpts(pv[1]||'07:00')}</select>`;}
     const wds=[0,1,2,3,4,5,6].map(d=>`<label style="margin:0 2px"><input type="checkbox" ${wd[d]?'checked':''} onchange="cSetWd(${ti},${gi},${ci},${d},this.checked)">周${weekTxt[d]}</label>`).join('');
     return `<div class="cond-item" id="cond${ti}_${gi}_${ci}">
       <select onchange="cSet(${ti},${gi},${ci},'type',this.value)">${typeList.map(([v,n])=>`<option value="${v}" ${c.type===v?'selected':''}>${n}</option>`).join('')}</select>
@@ -905,10 +907,18 @@ function createOfflineTasks(){
   renderTasks();toast('✅ 已添加3个断线报警任务，点"保存全部设置"生效');
 }
 function delTask(i){if(!confirm('确定删除任务"' +(configData.automation_tasks[i].name||'')+ '"？'))return;configData.automation_tasks.splice(i,1);expandedTaskKey=null;renderTasks();}
+function taskMove(i,dir){ // 上移/下移：与相邻任务交换（顺序=数组顺序=展示顺序）
+  const a=configData.automation_tasks,j=i+dir;
+  if(j<0||j>=a.length)return;
+  [a[i],a[j]]=[a[j],a[i]];
+  if(expandedTaskKey==='idx'+i)expandedTaskKey=taskKey(a[j],j);
+  else if(expandedTaskKey==='idx'+j)expandedTaskKey=taskKey(a[i],i);
+  renderTasks();
+}
 function tSet(i,k,v){if(k.includes('.')){const[a,b]=k.split('.');configData.automation_tasks[i][a]=configData.automation_tasks[i][a]||{};configData.automation_tasks[i][a][b]=v;}else configData.automation_tasks[i][k]=v;}
 function f1(v){const n=Number(v);return isNaN(n)?(v===null||v===undefined?'-':v):n.toFixed(1);}
-function normT(t){t=String(t||'').trim();const m=t.match(/(\d{1,2}):?(\d{2})?/);if(!m)return '00:00';const h=Math.min(23,Math.max(0,parseInt(m[1])));const mi=m[2]?parseInt(m[2]):0;return String(h).padStart(2,'0')+':'+(mi<30?'00':'30');}
-function timeOpts(cur){let h='';for(let k=0;k<48;k++){const t=String(Math.floor(k/2)).padStart(2,'0')+':'+(k%2?'30':'00');h+='<option value="'+t+'" '+(t===normT(cur)?'selected':'')+'>'+t+'</option>';}return h;}
+function normT(t){t=String(t||'').trim();const m=t.match(/(\d{1,2})[:：]?(\d{1,2})?/);if(!m)return '00:00';const h=Math.min(23,Math.max(0,parseInt(m[1])));const mi=Math.min(59,Math.max(0,m[2]?parseInt(m[2]):0));return String(h).padStart(2,'0')+':'+String(mi).padStart(2,'0');}
+function timeOpts(cur){const c=normT(cur);let h='',has=false;for(let k=0;k<48;k++){const t=String(Math.floor(k/2)).padStart(2,'0')+':'+(k%2?'30':'00');if(t===c)has=true;h+='<option value="'+t+'" '+(t===c?'selected':'')+'>'+t+'</option>';}h+='<option value="__custom__" '+(has?'':'selected')+'>自定义…</option>';return h;}
 function gSet(ti,gi,k,v){const g=ensureGroups(ti)[gi];if(g)g[k]=v;}
 function toggleGMsg(ti,gi){const el=document.getElementById('gmsg'+ti+'_'+gi);if(el)el.style.display=el.style.display==='none'?'':'none';}
 function addCond(i,gi){
@@ -984,6 +994,25 @@ function cSetT2(ti,gi,ci,part,v){
   const p=cur.includes('-')?cur.split('-'):[cur,'07:00'];
   if(part==='s')p[0]=v;else p[1]=v;
   cSet(ti,gi,ci,'tg_value',p[0]+'-'+p[1]);
+}
+function tPick(ti,gi,ci,part,v){
+  if(v==='__custom__'){ // 下拉选「自定义…」：局部把该端 select 换成输入框（不重建整行）
+    const c=ensureGroups(ti)[gi].conds[ci];
+    let cur;
+    if(part===null)cur=normT(c.tg_value);
+    else{const p=String(c.tg_value||'22:00-7:00').split('-');cur=normT(part==='s'?(p[0]||'22:00'):(p[1]||'07:00'));}
+    const id='time'+ti+'_'+gi+'_'+ci+(part===null?'':'_'+part);
+    const el=document.getElementById(id);
+    const arg=part===null?'null':"'"+part+"'";
+    if(el)el.outerHTML=`<input type="text" id="${id}" style="width:86px" placeholder="HH:MM" value="${cur}" onchange="tCustomSet(${ti},${gi},${ci},${arg},this.value)">`;
+  }else if(part===null)cSet(ti,gi,ci,'tg_value',v);
+  else cSetT2(ti,gi,ci,part,v);
+}
+function tCustomSet(ti,gi,ci,part,v){
+  if(!String(v||'').trim())toast('请输入 HH:MM 格式时间，如 9:05');
+  const nv=normT(v); // 宽松解析任意分钟，非法/空兜底 00:00
+  if(part===null)cSet(ti,gi,ci,'tg_value',nv);
+  else cSetT2(ti,gi,ci,part,nv); // cSet 局部重渲染该行，恢复下拉并保持自定义值选中态
 }
 function cSetWd(ti,gi,ci,d,v){
   const c=ensureGroups(ti)[gi].conds[ci];

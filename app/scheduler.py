@@ -316,6 +316,14 @@ class Scheduler:
                                                     for c in t["conditions"])]
         for task in tasks:
             try:
+                # 保存立即生效：每个任务评估前重读最新配置（按 id/名字匹配最新版本），
+                # 避免保存后最长等一个轮询周期才应用（旧值误触发）
+                latest = self.config_store.get()
+                lt = next((x for x in (latest.get("automation_tasks") or [])
+                           if (x.get("id") and x.get("id") == task.get("id"))
+                           or (not x.get("id") and x.get("name") == task.get("name"))), None)
+                if lt:
+                    task = lt
                 # 按任务绑定的数据源构建快照（旧任务默认第一个源）
                 src_name = task.get("ns_source") or (src_names[0] if src_names else None)
                 with self._lock:
