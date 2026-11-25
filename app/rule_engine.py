@@ -46,6 +46,9 @@ OPS = {
     "<": lambda a, b: a < b,
 }
 
+# 定点触发容差：仅定点时刻起 N 分钟内条件成立才发（错过当天不再补发）
+POINT_TOLERANCE_MIN = 2
+
 
 def _hm(s):
     """'H:MM'/'HH:MM' -> 分钟数；非法返回 None。"""
@@ -270,7 +273,8 @@ def evaluate_conditions(task, snap, now=None):
 
 def evaluate_window(tg_type, tg_value, weekdays, now):
     """组级时间窗三态：none=全部(仅周几过滤)；range=时间段(支持 22:00-7:00 跨夜)；
-    point=定点(当日到点后首个调度周期命中，每日一次由 group_dates 状态保证)。"""
+    point=定点(仅定点时刻起 POINT_TOLERANCE_MIN 分钟内为真，错过当天不再补发，
+    每日一次由 group_dates 状态保证)。"""
     if weekdays and any(weekdays):
         if not weekdays[now.weekday()]:
             return False
@@ -281,7 +285,7 @@ def evaluate_window(tg_type, tg_value, weekdays, now):
     curm = now.hour * 60 + now.minute
     if t == "point":
         sm = _hm(tv)
-        return sm is not None and curm >= sm
+        return sm is not None and sm <= curm <= sm + POINT_TOLERANCE_MIN
     # range
     if "-" not in tv:
         return False

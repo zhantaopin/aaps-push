@@ -72,6 +72,10 @@ table.events tr:last-child td{border-bottom:none;}
 .tdot{width:9px;height:9px;border-radius:50%;flex-shrink:0;}
 .tdot.t0{background:#2563eb;}.tdot.t1{background:#059669;}.tdot.t2{background:#7c3aed;}.tdot.t3{background:#d97706;}
 .task-row:last-child{border-bottom:none;}
+.drag-handle{cursor:grab;color:#64748b;padding:2px 4px;font-size:16px;touch-action:none;user-select:none;-webkit-user-select:none;}
+.task-row.dragging{opacity:.45;pointer-events:none;}
+.task-row.drop-ok{outline:2px dashed #22a55f;outline-offset:-2px;}
+.task-row.drop-bad{outline:2px dashed #e5484d;outline-offset:-2px;}
 .cat-title{font-size:13px;font-weight:600;color:var(--blue);margin:14px 0 4px;padding-left:2px;}
 .cat-title:first-child{margin-top:4px;}
 .task-num{width:22px;height:22px;border-radius:50%;background:#eef2f7;color:var(--ink2);font-size:12px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
@@ -596,12 +600,11 @@ function renderTasks(){
       const t=ts[i],key=taskKey(t,i),en=t.enabled!==false;num++;
       const tc='t'+((num-1)%4);
       let html=`<div class="task-row ${tc}">
+        <span class="drag-handle" data-drag="${i}">≡</span>
         <span class="task-num">${num}</span>
         <span class="tdot ${tc}"></span>
         <label class="switch"><input type="checkbox" ${en?'checked':''} onchange="toggleTaskEnabled(${i},this.checked)"><span class="slider"></span></label>
         <span class="task-name ${en?'':'off'}" onclick="toggleExpand('${key}')">${t.name||''}</span>
-        <button class="btn btn-gray btn-sm" style="margin:0;padding:0 7px" ${i===0?'disabled':''} onclick="taskMove(${i},-1)">↑</button>
-        <button class="btn btn-gray btn-sm" style="margin:0;padding:0 7px" ${i===ts.length-1?'disabled':''} onclick="taskMove(${i},1)">↓</button>
         <button class="btn btn-gray btn-sm" style="margin:0" onclick="toggleExpand('${key}')">${expandedTaskKey===key?'收起 ▲':'⚙ 设置'}</button>
         <button class="btn btn-danger btn-sm" style="margin:0" onclick="delTask(${i})">🗑</button>
       </div>`;
@@ -907,14 +910,43 @@ function createOfflineTasks(){
   renderTasks();toast('✅ 已添加3个断线报警任务，点"保存全部设置"生效');
 }
 function delTask(i){if(!confirm('确定删除任务"' +(configData.automation_tasks[i].name||'')+ '"？'))return;configData.automation_tasks.splice(i,1);expandedTaskKey=null;renderTasks();}
-function taskMove(i,dir){ // 上移/下移：与相邻任务交换（顺序=数组顺序=展示顺序）
-  const a=configData.automation_tasks,j=i+dir;
-  if(j<0||j>=a.length)return;
-  [a[i],a[j]]=[a[j],a[i]];
-  if(expandedTaskKey==='idx'+i)expandedTaskKey=taskKey(a[j],j);
-  else if(expandedTaskKey==='idx'+j)expandedTaskKey=taskKey(a[i],i);
-  renderTasks();
+/* ===== 任务分类内拖拽排序（≡ 手柄，桌面/手机统一 Pointer Events） ===== */
+const _dg={i:-1,el:null,started:false,x:0,y:0,target:-1};
+function spliceMove(from,to){const a=configData.automation_tasks;if(from===to||from<0||to<0||from>=a.length||to>=a.length)return;const t=a.splice(from,1)[0];a.splice(to,0,t);
+  if(expandedTaskKey==='idx'+from)expandedTaskKey=taskKey(t,to); // idx 型展开键跟随被拖任务
 }
+function _dgClear(){document.querySelectorAll('.task-row.drop-ok,.task-row.drop-bad').forEach(r=>r.classList.remove('drop-ok','drop-bad'));_dg.target=-1;}
+function _dgReset(){if(_dg.el)_dg.el.classList.remove('dragging');_dg.el=null;_dg.i=-1;_dg.started=false;_dg.target=-1;}
+function _dgDown(e){const h=e.target.closest('.drag-handle');if(!h)return;const row=h.closest('.task-row');
+  _dg.i=+h.getAttribute('data-drag');_dg.el=row;_dg.started=false;_dg.x=e.clientX;_dg.y=e.clientY;
+  try{h.setPointerCapture(e.pointerId);}catch(_){}}
+function _dgMove(e){if(_dg.i<0)return;
+  if(!_dg.started){if(Math.hypot(e.clientX-_dg.x,e.clientY-_dg.y)<6)return;_dg.started=true;_dg.el.classList.add('dragging');}
+  _dgClear();
+  const el=document.elementFromPoint(e.clientX,e.clientY);
+  const row=el&&el.closest?el.closest('.task-row'):null;
+  if(!row||row===_dg.el)return;
+  const idx=getTaskIndex(row);
+  if(idx<0||idx===_dg.i)return;
+  const a=configData.automation_tasks;
+  if((a[idx].category||'未分类')!==(a[_dg.i].category||'未分类')){row.classList.add('drop-bad');_dg.target=-1;}
+  else{row.classList.add('drop-ok');_dg.target=idx;}
+}
+function getTaskIndex(row){ // 行序号 → automation_tasks 索引（跳过折叠分类不影响：行按 map 顺序渲染，data-drag 在手柄上）
+  const h=row.querySelector('.drag-handle');return h?+h.getAttribute('data-drag'):-1;
+}
+function _dgUp(e){if(_dg.i<0)return;
+  const cancel=e&&e.type==='pointercancel';
+  const from=_dg.i,to=_dg.target;
+  if(_dg.started)_dg.el.classList.remove('dragging');
+  if(!cancel&&_dg.started&&to>=0&&to!==from){spliceMove(from,to);renderTasks();saveConfig();toast('✅ 已调整任务顺序');}
+  else if(!cancel&&_dg.started)toast('跨分类拖动无效，任务归属在编辑器里改分类');
+  _dgClear();_dgReset();
+}
+document.addEventListener('pointerdown',_dgDown,true);
+document.addEventListener('pointermove',_dgMove,true);
+document.addEventListener('pointerup',_dgUp,true);
+document.addEventListener('pointercancel',_dgUp,true);
 function tSet(i,k,v){if(k.includes('.')){const[a,b]=k.split('.');configData.automation_tasks[i][a]=configData.automation_tasks[i][a]||{};configData.automation_tasks[i][a][b]=v;}else configData.automation_tasks[i][k]=v;}
 function f1(v){const n=Number(v);return isNaN(n)?(v===null||v===undefined?'-':v):n.toFixed(1);}
 function normT(t){t=String(t||'').trim();const m=t.match(/(\d{1,2})[:：]?(\d{1,2})?/);if(!m)return '00:00';const h=Math.min(23,Math.max(0,parseInt(m[1])));const mi=Math.min(59,Math.max(0,m[2]?parseInt(m[2]):0));return String(h).padStart(2,'0')+':'+String(mi).padStart(2,'0');}
