@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 """SQLite 持久化：任务运行状态、事件日志、KV（实例 id 等）。WAL 模式，线程安全。"""
+import json
 import sqlite3
 import threading
 import time
@@ -26,6 +27,10 @@ class Database:
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 ts TEXT, level TEXT, task TEXT, channel TEXT, detail TEXT);
         """)
+        # 分支组定点"每日一次"状态（列式迁移兼容旧库）
+        cols = [r[1] for r in self.conn.execute("PRAGMA table_info(task_state)")]
+        if "group_dates" not in cols:
+            self.conn.execute("ALTER TABLE task_state ADD COLUMN group_dates TEXT DEFAULT '{}'")
         self.conn.commit()
 
     # ---- KV ----
@@ -47,19 +52,26 @@ class Database:
             row = self.conn.execute(
                 "SELECT * FROM task_state WHERE task_id=?", (task_id,)).fetchone()
             if row:
+                try:
+                    gd = json.loads(row["group_dates"] or "{}")
+                except (ValueError, TypeError):
+                    gd = {}
                 return {"last": row["last"], "last_trigger_date": row["last_trigger_date"],
-                        "executed": bool(row["executed"])}
-            return {"last": 0.0, "last_trigger_date": "", "executed": False}
+                        "executed": bool(row["executed"]), "group_dates": gd}
+            return {"last": 0.0, "last_trigger_date": "", "executed": False,
+                    "group_dates": {}}
 
     def set_task_state(self, task_id, **fields):
         with self._lock:
             st = self.get_task_state(task_id)
             st.update(fields)
             self.conn.execute(
-                "INSERT INTO task_state(task_id,last,last_trigger_date,executed) VALUES(?,?,?,?) "
+                "INSERT INTO task_state(task_id,last,last_trigger_date,executed,group_dates) VALUES(?,?,?,?,?) "
                 "ON CONFLICT(task_id) DO UPDATE SET last=excluded.last, "
-                "last_trigger_date=excluded.last_trigger_date, executed=excluded.executed",
-                (task_id, st["last"], st["last_trigger_date"], int(st["executed"])))
+                "last_trigger_date=excluded.last_trigger_date, executed=excluded.executed, "
+                "group_dates=excluded.group_dates",
+                (task_id, st["last"], st["last_trigger_date"], int(st["executed"]),
+                 json.dumps(st.get("group_dates") or {}, ensure_ascii=False)))
             self.conn.commit()
 
     # ---- 事件日志 ----

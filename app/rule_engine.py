@@ -111,7 +111,9 @@ def _to_num(val):
 
 def effective_groups(task):
     """分支组视图：condition_groups 优先；否则由旧 conditions 按"或"切组兼容。
-    返回 [{name, time_value, weekdays, msg, conds}]，组间"或"、组内"且"。"""
+    组时间三态：tg_type(none=全部/range=时间段/point=定点每日一次) + tg_value + weekdays。
+    旧数据迁移：无 tg_type 时 time_value 非空视为 range。
+    返回 [{name, tg_type, tg_value, weekdays, msg, conds}]，组间"或"、组内"且"。"""
     cgs = task.get("condition_groups")
     groups = []
     if cgs:
@@ -120,9 +122,14 @@ def effective_groups(task):
             if not conds:
                 continue
             name = (g.get("name") or "").strip() or "组%d" % (k + 1)
+            if g.get("tg_type") in ("none", "range", "point"):
+                tg_type, tg_value = g["tg_type"], str(g.get("tg_value", "") or "")
+            else:  # 旧结构迁移
+                tv = str(g.get("time_value", "") or "")
+                tg_type, tg_value = ("range", tv) if tv else ("none", "")
             groups.append({
                 "name": name,
-                "time_value": str(g.get("time_value", "") or ""),
+                "tg_type": tg_type, "tg_value": tg_value,
                 "weekdays": g.get("weekdays") or [],
                 "msg": g.get("msg") or "",
                 "conds": conds,
@@ -141,8 +148,8 @@ def effective_groups(task):
         cur.append(cond)
     if cur:
         chunks.append(cur)
-    return [{"name": "组%d" % (i + 1), "time_value": "", "weekdays": [],
-             "msg": "", "conds": cs} for i, cs in enumerate(chunks)]
+    return [{"name": "组%d" % (i + 1), "tg_type": "none", "tg_value": "",
+             "weekdays": [], "msg": "", "conds": cs} for i, cs in enumerate(chunks)]
 
 
 def _eval_cond(cond, fields):
@@ -177,8 +184,10 @@ def evaluate_conditions(task, snap, now=None):
     toks, hit_names = [], []
     for g in groups:
         if now is not None:
-            win_ok = evaluate_window(g["time_value"], g["weekdays"], now)
-            parts = ["时间窗OK" if win_ok else "时间窗外"]
+            tt, tv = g.get("tg_type") or "none", g.get("tg_value") or ""
+            tag = {"none": "全部", "range": "范围" + tv, "point": "定点" + tv}.get(tt, tt)
+            win_ok = evaluate_window(tt, tv, g["weekdays"], now)
+            parts = ["时间[%s]%s" % (tag, "OK" if win_ok else "不满足")]
         else:
             win_ok, parts = True, []
         cond_ok = True
@@ -193,26 +202,28 @@ def evaluate_conditions(task, snap, now=None):
     return bool(hit_names), " ‖ ".join(toks), hit_names
 
 
-def evaluate_window(time_val, weekdays, now):
-    """组级时间窗：时间段（支持 22:00-7:00 跨夜）+ 星期几。均空 = 全天每天。"""
-    tv = str(time_val or "").replace(" ", "")
-    if tv:
-        if "-" not in tv:
-            return False
-        s, e = [x.strip() for x in tv.split("-", 1)]
-        sm, em = _hm(s), _hm(e)
-        if sm is None or em is None:
-            return False
-        curm = now.hour * 60 + now.minute
-        if sm <= em:
-            if not (sm <= curm <= em):
-                return False
-        elif not (curm >= sm or curm <= em):
-            return False
+def evaluate_window(tg_type, tg_value, weekdays, now):
+    """组级时间窗三态：none=全部(仅周几过滤)；range=时间段(支持 22:00-7:00 跨夜)；
+    point=定点(当日到点后首个调度周期命中，每日一次由 group_dates 状态保证)。"""
     if weekdays and any(weekdays):
         if not weekdays[now.weekday()]:
             return False
-    return True
+    t = tg_type or "none"
+    tv = str(tg_value or "").replace(" ", "")
+    if t == "none" or not tv:
+        return True
+    curm = now.hour * 60 + now.minute
+    if t == "point":
+        sm = _hm(tv)
+        return sm is not None and curm >= sm
+    # range
+    if "-" not in tv:
+        return False
+    s, e = [x.strip() for x in tv.split("-", 1)]
+    sm, em = _hm(s), _hm(e)
+    if sm is None or em is None:
+        return False
+    return (sm <= curm <= em) if sm <= em else (curm >= sm or curm <= em)
 
 
 def evaluate_time(task, now):
@@ -287,18 +298,27 @@ def check_and_execute(task, snap, config, db, now):
     if not cond_ok:
         return False, "条件不满足: %s" % cond_reason
 
-    # 触发：消息用第一个命中组的文案（留空则用任务统一消息），{%组名%}=命中组名
+    # 触发：命中组里选第一个非"定点且今日已触发"的组；消息用该组文案，{%组名%}=命中组名
+    today = now.strftime("%Y-%m-%d")
+    gdates = dict(state.get("group_dates") or {})
     final_group = None
     for g in effective_groups(task):
         if g["name"] in hit_names:
+            if (g.get("tg_type") == "point") and gdates.get(g["name"]) == today:
+                continue  # 定点组每日一次：当日已触发则跳过
             final_group = g
             break
-    group_name = final_group["name"] if final_group else ""
+    if final_group is None:
+        return False, "命中组均为定点组且今日已触发"
+    if final_group.get("tg_type") == "point":
+        gdates[final_group["name"]] = today
+    group_name = final_group["name"]
     executed_once = task.get("execution_type", "repeat") == "once"
     db.set_task_state(task_id, last=snap["now_ts"],
                       last_trigger_date=today if executed_once
                       else state.get("last_trigger_date", ""),
-                      executed=executed_once)
+                      executed=executed_once,
+                      group_dates=gdates)
     message = render_message(
         (final_group.get("msg") if final_group else "") or task.get("msg", ""),
         snap, group_name=group_name)

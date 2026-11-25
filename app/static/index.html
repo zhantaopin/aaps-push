@@ -616,7 +616,7 @@ function buildEditor(t,i){
       </select>
       <span class="muted">本任务用哪个 Nightscout 的数据判定与渲染</span></div>
     <h3>触发条件</h3>
-    <p class="muted" style="margin:0 0 4px;font-size:12px">彩色卡片=分支组：组内「且」全部满足，组间「或」任一组满足即触发一次。每组可命名/设时间段和星期几/写本组专属消息（留空用任务统一消息）；消息里可用 {%组名%}</p>
+    <p class="muted" style="margin:0 0 4px;font-size:12px">彩色卡片=分支组：组内「且」全部满足，组间「或」任一组满足即触发一次。每组可命名、设生效时间（全天/时间段/定点，定点每日最多一次）、星期几、写本组专属消息（留空用任务统一消息）；消息里可用 {%组名%}</p>
     <div id="condBox${i}">${conds||'<p class="muted" style="margin:6px 0">无条件 = 到提醒间隔就推送</p>'}</div>
     <button class="btn btn-gray btn-sm" onclick="addCond(${i})">➕ 加条件</button>
     <h3>提醒频率</h3>
@@ -707,7 +707,7 @@ function ensureGroups(i){
   if(Array.isArray(t.condition_groups))return t.condition_groups;
   const cs=t.conditions||[];
   t.condition_groups=splitGroups(cs).map((g,k)=>({
-    name:'组'+(k+1),time_value:'',weekdays:[],msg:'',
+    name:'组'+(k+1),tg_type:'none',tg_value:'',time_value:'',weekdays:[],msg:'',
     conds:cs.slice(g.start,g.end).map((c,idx)=>Object.assign({},c,{logic:idx===0?'与':(c.logic==='非'?'非':'与')}))
   }));
   delete t.conditions;
@@ -776,10 +776,14 @@ function normConds(cs){
     logic:String(c.logic||'与')}));
 }
 function normGroups(gs){
-  return (gs||[]).filter(g=>g&&Array.isArray(g.conds)&&g.conds.length).map(g=>({
-    name:String(g.name||''),time_value:String(g.time_value||''),
-    weekdays:Array.isArray(g.weekdays)?g.weekdays.map(Boolean):[],msg:String(g.msg||''),
-    conds:normConds(g.conds)}));
+  return (gs||[]).filter(g=>g&&Array.isArray(g.conds)&&g.conds.length).map(g=>{
+    // 三态迁移：无 tg_type 时旧 time_value 非空视为时间段
+    const tt=g.tg_type||((g.time_value||g.tg_value)?'range':'none');
+    const tv=g.tg_value!=null&&g.tg_value!==''?g.tg_value:(g.time_value||'');
+    return {name:String(g.name||''),tg_type:tt,tg_value:String(tv),time_value:String(g.time_value||''),
+      weekdays:Array.isArray(g.weekdays)?g.weekdays.map(Boolean):[],msg:String(g.msg||''),
+      conds:normConds(g.conds)};
+  });
 }
 async function doImport(){
   const ta=document.getElementById('importText');
@@ -869,12 +873,19 @@ function condGroupsHtml(i){
   gs.forEach((g,gi)=>{
     if(gi>0)html+='<div class="or-badge"><span>或</span></div>';
     const wd=(g.weekdays||[]).map(Boolean);
+    const tt=g.tg_type||(g.time_value?'range':'none');
+    const tv=(g.tg_value!=null&&g.tg_value!=='')?g.tg_value:(g.time_value||'');
+    const ph={none:'全天生效',range:'如 22:00-7:00，可跨夜',point:'如 9:00，每日最多一次'}[tt]||'';
     html+=`<div class="cond-group g${gi%4}"><div class="cond-group-hd">
       <span class="or-tag">组${gi+1}</span>
       <input style="flex:1;min-width:100px;font-size:13px" placeholder="组名（如：夜间严重）" value="${(g.name||'').replace(/"/g,'&quot;')}" onchange="gSet(${i},${gi},'name',this.value)">
       <button class="btn btn-danger btn-sm" style="margin:0" onclick="delGroup(${i},${gi})">🗑</button></div>
-      <div class="cond-group-hd"><span class="muted">⏰</span>
-      <input style="flex:1;min-width:100px;font-size:13px" placeholder="时间段 全天（如 22:00-7:00 可跨夜）" value="${g.time_value||''}" onchange="gSet(${i},${gi},'time_value',this.value)">
+      <div class="cond-group-hd">
+      <select style="flex:none" onchange="gSet(${i},${gi},'tg_type',this.value)">
+        <option value="none" ${tt==='none'?'selected':''}>⏰ 全天</option>
+        <option value="range" ${tt==='range'?'selected':''}>⏰ 时间段</option>
+        <option value="point" ${tt==='point'?'selected':''}>⏰ 定点</option></select>
+      <input style="flex:1;min-width:90px;font-size:13px" placeholder="${ph}" value="${String(tv).replace(/"/g,'&quot;')}" onchange="gSet(${i},${gi},'tg_value',this.value)">
       <span class="muted" style="font-size:11px">${[0,1,2,3,4,5,6].map(d=>`<label style="margin:0 2px"><input type="checkbox" ${wd[d]?'checked':''} onchange="setWdG(${i},${gi},${d},this.checked)">${weekTxt[d]}</label>`).join('')}</span></div>
       <div class="cond-group-hd"><a href="javascript:void(0)" class="muted" style="font-size:12px" onclick="toggleGMsg(${i},${gi})">💬 本组消息 ▾</a></div>
       <textarea id="gmsg${i}_${gi}" style="display:none;height:70px;margin:4px 0" placeholder="留空=用任务统一消息；可用 {%组名%} 及其他变量" onchange="gSet(${i},${gi},'msg',this.value)">${(g.msg||'').replace(/</g,'&lt;')}</textarea>`;
