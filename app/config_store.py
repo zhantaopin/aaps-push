@@ -53,7 +53,6 @@ class ConfigStore:
                 task.setdefault("time_value", "")
                 task.setdefault("weekdays", [False] * 7)
                 task.setdefault("to_users", [])
-                task.setdefault("push_services", ["wechat"])
                 task.setdefault("push_options", {})
                 task.setdefault("conditions", [])
                 task.setdefault("msg", "")

@@ -109,11 +109,45 @@ def _to_num(val):
         return 0.0
 
 
+def _time_cond(tt, tv, wd):
+    """构造时间条件（AAPS 式触发器节点：none=不设/仅周几，range=时间段，point=定点）。"""
+    return {"type": "时间", "op": "==", "value": 0, "logic": "与",
+            "tg_type": tt or "none", "tg_value": str(tv or ""),
+            "weekdays": [bool(x) for x in (wd or [])]}
+
+
+def _is_time_filter(tt, tv, wd):
+    """该组/任务级时间配置是否构成过滤（none 且无周几=无过滤）。"""
+    return (tt or "none") != "none" or bool(str(tv or "").strip()) or any(wd or [])
+
+
+def effective_task(task):
+    """运行时任务视图（浅拷贝）：先用原任务完成两级时间迁移（嵌入组内时间条件），
+    再清空任务级 time_* 使 evaluate_time 放行；_st 等引用保持共享。
+    迁移幂等：视图再进 effective_groups 不会重复迁移。"""
+    t = dict(task)
+    t["condition_groups"] = effective_groups(task)
+    t.pop("conditions", None)
+    t["time_type"] = "none"
+    t["time_value"] = ""
+    t["weekdays"] = []
+    return t
+
+
+def _chain_logic(g, idx, task):
+    """组连接词：组自带 logic 优先；旧 group_logic 迁移（'且'→非首组全'且'，其余→'或'）。"""
+    if g.get("logic") in ("或", "且", "非"):
+        return g["logic"]
+    gl = task.get("group_logic") or "或"
+    return gl if (idx > 0 and gl == "且") else "或"
+
+
 def effective_groups(task):
     """分支组视图：condition_groups 优先；否则由旧 conditions 按"或"切组兼容。
-    组时间三态：tg_type(none=全部/range=时间段/point=定点每日一次) + tg_value + weekdays。
-    旧数据迁移：无 tg_type 时 time_value 非空视为 range。
-    返回 [{name, tg_type, tg_value, weekdays, msg, conds}]，组间"或"、组内"且"。"""
+    每组带 logic 连接词（或=并列/且=挂链/非=整体取反挂链），旧 group_logic 迁移。
+    时间归一（AAPS 式）：组级 tg_type/tg_value/weekdays 与任务级 time_type/time_value/
+    weekdays 迁移为组内首部"时间"条件（任务级在组级之后，AND 语义与旧版一致，
+    双时间并存的死区如实保留）；迁移后组 tg 字段清空。返回 [{name, logic, conds, ...}]。"""
     cgs = task.get("condition_groups")
     groups = []
     if cgs:
@@ -127,15 +161,18 @@ def effective_groups(task):
             else:  # 旧结构迁移
                 tv = str(g.get("time_value", "") or "")
                 tg_type, tg_value = ("range", tv) if tv else ("none", "")
+            weekdays = [bool(x) for x in (g.get("weekdays") or [])]
+            if _is_time_filter(tg_type, tg_value, weekdays):
+                conds = [_time_cond(tg_type, tg_value, weekdays)] + list(conds)
             groups.append({
                 "name": name,
-                "tg_type": tg_type, "tg_value": tg_value,
-                "weekdays": g.get("weekdays") or [],
-                "msg": g.get("msg") or "",
+                "logic": _chain_logic(g, k, task),
+                "tg_type": "none", "tg_value": "",  # 已迁为时间条件
+                "weekdays": [], "msg": g.get("msg") or "",
                 "conds": conds,
             })
         if groups:
-            return groups
+            return _apply_task_time(task, groups)
     conditions = task.get("conditions") or []
     if not conditions:
         return []
@@ -148,12 +185,36 @@ def effective_groups(task):
         cur.append(cond)
     if cur:
         chunks.append(cur)
-    return [{"name": "组%d" % (i + 1), "tg_type": "none", "tg_value": "",
-             "weekdays": [], "msg": "", "conds": cs} for i, cs in enumerate(chunks)]
+    groups = [{"name": "组%d" % (i + 1), "logic": "或", "tg_type": "none", "tg_value": "",
+               "weekdays": [], "msg": "", "conds": cs} for i, cs in enumerate(chunks)]
+    return _apply_task_time(task, groups)
 
 
-def _eval_cond(cond, fields):
-    """单条件求值，返回 (结果, 原因说明)；"非"=该项取反。"""
+def _apply_task_time(task, groups):
+    """任务级时间迁移：time_type/time_value/weekdays 非空时给每组追加一条任务级
+    时间条件（排在组级之后），运行时视图清空任务级 time_*。"""
+    tt = task.get("time_type") or "none"
+    tv = str(task.get("time_value", "") or "").replace(" ", "")
+    wd = [bool(x) for x in (task.get("weekdays") or [])]
+    if _is_time_filter(tt, tv, wd):
+        for g in groups:  # 组级时间条件在前，任务级在后（每组独立副本）
+            g["conds"] = g["conds"] + [dict(_time_cond(tt, tv, wd))]
+    return groups
+
+
+def _eval_cond(cond, fields, now=None):
+    """单条件求值，返回 (结果, 原因说明)；"非"=该项取反。
+    type=='时间' 为时间条件：tg_type(none/range/point)+tg_value+weekdays 三态窗口。"""
+    if cond.get("type") == "时间":
+        tt = cond.get("tg_type") or "none"
+        tv = str(cond.get("tg_value") or "").replace(" ", "")
+        wd = cond.get("weekdays") or []
+        tag = {"none": "不设" + ("(仅周几)" if any(wd) else ""),
+               "range": "范围" + tv, "point": "定点" + tv}.get(tt, tt)
+        if now is None:
+            return True, "时间[%s]OK(无now按真)" % tag
+        ok = evaluate_window(tt, tv, wd, now)
+        return ok, "时间[%s]%s" % (tag, "OK" if ok else "不满足")
     cond_type = cond.get("type", "血糖绝对值")
     op = cond.get("op", ">")
     try:
@@ -174,40 +235,37 @@ def _eval_cond(cond, fields):
 
 
 def evaluate_conditions(task, snap, now=None):
-    """分支组判断：组间连接词 group_logic（或=任一组满足/且=全部组满足/异或=恰好一组满足，
-    对齐 AAPS And/Or/Xor），组内"且"，组级时间窗三态不满足的组不参与触发。
-    返回 (是否满足, 原因说明, 命中组名列表[按组顺序])。"""
+    """顺序链条判断（从上到下）：每组 logic（或/且/非）表示与「前面累计结果」的组合——
+    或=任一分支命中（并列），且=与累计结果同真才触发，非=该组条件全不满足才算命中
+    （组整体取反）。旧 group_logic 已由 effective_groups 迁到各组 logic。
+    返回 (是否满足, 原因说明, 有效命中组名列表[按组顺序，含非组取反命中])。"""
     fields = build_context(snap, None)["fields"]
     groups = effective_groups(task)
     if not groups:
         return True, "无分支(总是触发)", []
-    glogic = task.get("group_logic") or "或"
     toks, hit_names = [], []
-    for g in groups:
-        if now is not None:
-            tt, tv = g.get("tg_type") or "none", g.get("tg_value") or ""
-            tag = {"none": "全部", "range": "范围" + tv, "point": "定点" + tv}.get(tt, tt)
-            win_ok = evaluate_window(tt, tv, g["weekdays"], now)
-            parts = ["时间[%s]%s" % (tag, "OK" if win_ok else "不满足")]
-        else:
-            win_ok, parts = True, []
+    result = None
+    for gi, g in enumerate(groups):
+        parts = []
         cond_ok = True
         for cond in g["conds"]:
-            ok, reason = _eval_cond(cond, fields)
+            ok, reason = _eval_cond(cond, fields, now)
             cond_ok = cond_ok and ok
             parts.append(reason)
-        group_ok = win_ok and cond_ok
-        if group_ok:
+        logic = g.get("logic") or "或"
+        eff = (not cond_ok) if logic == "非" else cond_ok
+        if result is None:
+            result = eff
+        elif logic == "或":
+            result = result or eff
+        else:  # 且 / 非 挂链
+            result = result and eff
+        if eff:
             hit_names.append(g["name"])
-        toks.append("[%s] %s" % (g["name"], " & ".join(parts)))
-    if glogic == "且":
-        ok = len(hit_names) == len(groups)
-    elif glogic == "异或":
-        ok = len(hit_names) == 1
-    else:
-        ok = bool(hit_names)
-    head = "组间[%s] " % glogic if len(groups) > 1 else ""
-    return ok, head + " ‖ ".join(toks), hit_names
+        tag = "" if gi == 0 else "[%s]" % logic
+        toks.append("%s[%s] %s" % (tag, g["name"], " & ".join(parts)))
+    head = "组间链条 " if len(groups) > 1 else ""
+    return bool(result), head + " ‖ ".join(toks), hit_names
 
 
 def evaluate_window(tg_type, tg_value, weekdays, now):
@@ -277,11 +335,18 @@ def evaluate_time(task, now):
         time_type, time_val or "不限制", weekday_ok)
 
 
+def _group_is_point(group):
+    """组内是否含"定点"时间条件（每日一次由 group_dates 保证）。"""
+    return any(c.get("type") == "时间" and c.get("tg_type") == "point"
+               for c in group["conds"])
+
+
 def check_and_execute(task, snap, config, db, now):
     """单个任务判定与执行。返回 (是否触发, 说明)。"""
     task_id = task.get("id")
     state = db.get_task_state(task_id)
     task["_st"] = state
+    task = effective_task(task)  # 运行时视图：两级时间已迁为组内时间条件
     today = now.strftime("%Y-%m-%d")
 
     if not task.get("enabled", True):
@@ -312,13 +377,13 @@ def check_and_execute(task, snap, config, db, now):
     final_group = None
     for g in effective_groups(task):
         if g["name"] in hit_names:
-            if (g.get("tg_type") == "point") and gdates.get(g["name"]) == today:
+            if _group_is_point(g) and gdates.get(g["name"]) == today:
                 continue  # 定点组每日一次：当日已触发则跳过
             final_group = g
             break
     if final_group is None:
         return False, "命中组均为定点组且今日已触发"
-    if final_group.get("tg_type") == "point":
+    if _group_is_point(final_group):
         gdates[final_group["name"]] = today
     group_name = final_group["name"]
     executed_once = task.get("execution_type", "repeat") == "once"

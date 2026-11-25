@@ -145,6 +145,29 @@ def _max_bark_level(members):
     return SEVERITY_TO_LEVEL[best]
 
 
+def _eff_channels(r, task, config):
+    """任务级渠道覆盖：task.notify_chan={名字/组名: ''|wechat|bark|all}。
+    ''/all/未设置=跟随接收者自身配置；个人 override 优先于所在组的 override。"""
+    ov = task.get("notify_chan") or {}
+    oc = ov.get(r["name"])
+    if oc is None:
+        groups = task.get("receiver_groups")
+        if groups is None and task.get("receiver_group"):
+            groups = [task["receiver_group"]]
+        for gname in groups or []:
+            if gname == "__all__":
+                continue
+            if ov.get(gname):  # 任务里选中的组带渠道覆盖
+                g = next((g for g in (config.get("receiver_groups") or [])
+                          if g.get("name") == gname), None)
+                if g and r["name"] in (g.get("members") or []):
+                    oc = ov[gname]
+                    break
+    if not oc or oc == "all":
+        return r.get("channels") or []
+    return [oc] if oc in ("wechat", "bark") else (r.get("channels") or [])
+
+
 def dispatch(task, message, config, db, task_name="测试", only_channel=None):
     """按接收者模型的渠道配置分发消息。返回结果列表 [{channel, target, ok, detail}]。
 
@@ -157,16 +180,16 @@ def dispatch(task, message, config, db, task_name="测试", only_channel=None):
     # 任务级连发参数：对本任务的所有推送目标（微信+Bark）生效，默认不连发
     repeat, gap = _repeat_params(task)
 
-    # 微信目标：(收件人, 服务地址, API Key)——各自字段缺省回退全局
+    # 微信目标：(收件人, 服务地址, API Key)——各自字段缺省回退全局；渠道按任务级覆盖过滤
     wx_targets = []
     for r in selected:
-        if "wechat" in (r.get("channels") or []):
+        if "wechat" in _eff_channels(r, task, config):
             wx_targets.append((
                 r.get("wechat_to") or r["name"],
                 (r.get("wechat_url") or "").strip() or config.get("push_server_url"),
                 (r.get("wechat_key") or "").strip() or config.get("push_api_key")))
     wx_targets += [(b, config.get("push_server_url"), config.get("push_api_key")) for b in bare]
-    bark_members = [r for r in selected if "bark" in (r.get("channels") or [])]
+    bark_members = [r for r in selected if "bark" in _eff_channels(r, task, config)]
     bark_level = (task.get("push_options") or {}).get("bark_level") or \
         (_max_bark_level(bark_members) if bark_members else "timeSensitive")
 

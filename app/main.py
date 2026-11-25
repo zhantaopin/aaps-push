@@ -233,8 +233,9 @@ def create_app(scheduler, config_store, db, admin_password, secure_cookies=False
                 "now_ts": time.time(),
                 "ctx": rule_engine.build_snapshot_ctx(state, cfg.get("unit", "mmol/L"), src_name),
             }
-            time_ok, time_reason = rule_engine.evaluate_time(task, now)
-            cond_ok, cond_reason, hit_names = rule_engine.evaluate_conditions(task, snap, now)
+            tv = rule_engine.effective_task(task)  # 运行时视图：时间已迁为组内条件
+            time_ok, time_reason = rule_engine.evaluate_time(tv, now)
+            cond_ok, cond_reason, hit_names = rule_engine.evaluate_conditions(tv, snap, now)
             report.append({
                 "name": task.get("name"),
                 "source": src_name or "-",

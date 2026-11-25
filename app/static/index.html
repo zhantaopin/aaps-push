@@ -93,6 +93,10 @@ table.events tr:last-child td{border-bottom:none;}
 .cond-group.g1{border-left:5px solid #059669;background:#dcfaee;}
 .cond-group.g2{border-left:5px solid #7c3aed;background:#f0e9fe;}
 .cond-group.g3{border-left:5px solid #d97706;background:#fef3df;}
+.cond-group.g-dep{margin-left:26px;position:relative;}
+.cond-group.g-dep::before{content:"";position:absolute;left:-22px;top:-6px;bottom:50%;width:2px;background:#c9d6ea;}
+.recv-line{display:flex;align-items:center;gap:8px;padding:4px 2px;font-size:14px;}
+.recv-line label{display:flex;align-items:center;gap:6px;min-width:110px;}
 .or-badge{display:flex;gap:8px;align-items:center;justify-content:center;margin:4px 0 4px 10px;}
 .or-badge>span{background:#f59e0b;color:#fff;font-size:12px;font-weight:700;padding:2px 14px;border-radius:999px;}
 .or-tag{background:#f59e0b;color:#fff;font-size:12px;font-weight:700;padding:3px 10px;border-radius:999px;white-space:nowrap;}
@@ -244,8 +248,8 @@ summary{cursor:pointer;color:var(--blue);font-size:14px;font-weight:500;min-heig
 <div id="toast"></div>
 
 <script>
-const typeList=[["血糖绝对值","血糖绝对值"],["delta(5min)","delta(5min)"],["shortAvgDelta(15min)","短平均增量(15min)"],["longAvgDelta(30min)","长平均增量(30min)"],["总IOB","总IOB"],["大剂量IOB","大剂量IOB"],["基础率IOB","基础率IOB"],["COB","剩余COB"],["最终预测BG","最终预测BG"],["手表电量","手表电量(%)"],["手表离线(分钟)","手表离线(分钟)"],["手表掉电(30分钟)","手表掉电(30分钟)%"],["充电状态","充电状态"],["血糖延迟(分钟)","血糖延迟(分钟)"],["泵延迟(分钟)","泵延迟(分钟)"],["泵状态异常","泵状态异常"],["泵药量(单位)","泵药量(单位)"],["上次大剂量(分钟)","上次大剂量(分钟)"]];
-const COND_HELP={"血糖绝对值":"当前血糖值(mmol/L或mg/dL)，如\"小于 4\"触发低血糖提醒","delta(5min)":"近5分钟血糖变化速率，负数=在下降，如\"小于 -1\"代表快速下降","shortAvgDelta(15min)":"近15分钟平均变化速率，过滤瞬时波动","longAvgDelta(30min)":"近30分钟平均变化速率，反映整体趋势","总IOB":"体内胰岛素活性总量(单位U)","大剂量IOB":"餐前大剂量剩余活性(单位U)","基础率IOB":"基础量剩余活性(单位U)","COB":"体内未消耗完的碳水(克g)","最终预测BG":"AAPS 对未来的预测血糖值","手表电量":"手表当前电量百分比，如\"小于 20\"提醒充电","手表离线(分钟)":"手表多久没上报数据，如\"大于 60\"可能已关机","手表掉电(30分钟)":"30分钟内电量下降幅度%，如\"大于 2\"提示充电断开","充电状态":"等于\"充电中\"或\"未充电\"，与掉电条件组合判断充电故障","血糖延迟(分钟)":"数据多久没更新，如\"大于 20\"说明手机/手表断连(NS断线)","泵延迟(分钟)":"泵数据多久没更新，如\"大于 30\"说明泵失联","泵状态异常":"泵上报状态不是正常时触发(选\"异常\")","泵药量(单位)":"药液剩余量U，如\"小于 20\"提醒换药","上次大剂量(分钟)":"距上次大剂量的分钟数，如\"大于等于 120\"=超过2小时没打大剂量；无记录按0(刚打过)处理"};
+const typeList=[["时间","⏰ 时间"],["血糖绝对值","血糖绝对值"],["delta(5min)","delta(5min)"],["shortAvgDelta(15min)","短平均增量(15min)"],["longAvgDelta(30min)","长平均增量(30min)"],["总IOB","总IOB"],["大剂量IOB","大剂量IOB"],["基础率IOB","基础率IOB"],["COB","剩余COB"],["最终预测BG","最终预测BG"],["手表电量","手表电量(%)"],["手表离线(分钟)","手表离线(分钟)"],["手表掉电(30分钟)","手表掉电(30分钟)%"],["充电状态","充电状态"],["血糖延迟(分钟)","血糖延迟(分钟)"],["泵延迟(分钟)","泵延迟(分钟)"],["泵状态异常","泵状态异常"],["泵药量(单位)","泵药量(单位)"],["上次大剂量(分钟)","上次大剂量(分钟)"]];
+const COND_HELP={"时间":"不设时间=恒真(仅周几过滤)；定时=到点后当日触发一次；时间段支持 22:00-7:00 跨夜。周几不勾=每天都有效","血糖绝对值":"当前血糖值(mmol/L或mg/dL)，如\"小于 4\"触发低血糖提醒","delta(5min)":"近5分钟血糖变化速率，负数=在下降，如\"小于 -1\"代表快速下降","shortAvgDelta(15min)":"近15分钟平均变化速率，过滤瞬时波动","longAvgDelta(30min)":"近30分钟平均变化速率，反映整体趋势","总IOB":"体内胰岛素活性总量(单位U)","大剂量IOB":"餐前大剂量剩余活性(单位U)","基础率IOB":"基础量剩余活性(单位U)","COB":"体内未消耗完的碳水(克g)","最终预测BG":"AAPS 对未来的预测血糖值","手表电量":"手表当前电量百分比，如\"小于 20\"提醒充电","手表离线(分钟)":"手表多久没上报数据，如\"大于 60\"可能已关机","手表掉电(30分钟)":"30分钟内电量下降幅度%，如\"大于 2\"提示充电断开","充电状态":"等于\"充电中\"或\"未充电\"，与掉电条件组合判断充电故障","血糖延迟(分钟)":"数据多久没更新，如\"大于 20\"说明手机/手表断连(NS断线)","泵延迟(分钟)":"泵数据多久没更新，如\"大于 30\"说明泵失联","泵状态异常":"泵上报状态不是正常时触发(选\"异常\")","泵药量(单位)":"药液剩余量U，如\"小于 20\"提醒换药","上次大剂量(分钟)":"距上次大剂量的分钟数，如\"大于等于 120\"=超过2小时没打大剂量；无记录按0(刚打过)处理"};
 const opList=[["大于",">"],["大于等于",">="],["等于","=="],["小于","<"],["小于等于","<="]];
 const opTxt={">":"大于",">=":"≥","==":"等于","<":"小于","<=":"≤"};
 const logicList=[["与","且"],["或","或"],["非","非"]];
@@ -367,15 +371,15 @@ async function refreshStatus(){
     badge.textContent=s.is_leader?'主实例':'备实例';
     badge.className='badge '+(s.is_leader?'leader':'standby');
     document.getElementById('pwdWarn').style.display=s.password_is_default?'block':'none';
-    document.getElementById('bgNum').textContent=s.bg!==undefined&&s.bg!==null?s.bg:'--';
+    document.getElementById('bgNum').textContent=s.bg!==undefined&&s.bg!==null?f1(s.bg):'--';
     document.getElementById('bgUnit').textContent=s.unit||'';
     document.getElementById('bgTrend').textContent=s.trend||'-';
-    document.getElementById('cDelta').textContent=s.delta;
-    document.getElementById('cShort').textContent=s.short_delta;
-    document.getElementById('cLong').textContent=s.long_delta;
+    document.getElementById('cDelta').textContent=f1(s.delta);
+    document.getElementById('cShort').textContent=f1(s.short_delta);
+    document.getElementById('cLong').textContent=f1(s.long_delta);
     document.getElementById('cIob').textContent=s.iob+'U';
     document.getElementById('cCob').textContent=s.cob+'g';
-    document.getElementById('cFinal').textContent=(s.final_source==='无有效预测'||!s.final_value)?'-':s.final_value;
+    document.getElementById('cFinal').textContent=(s.final_source==='无有效预测'||!s.final_value)?'-':f1(s.final_value);
     if(s.watch_battery!==null&&s.watch_battery!==undefined){
       document.getElementById('chipWatch').style.display='block';
       const chg=s.watch_charging?'⚡':'';
@@ -507,6 +511,12 @@ async function testReceiver(name){const r=await api('/api/test-push',{method:'PO
 function condText(c){
   const hit=typeList.find(x=>x[0]===c.type);
   const label=hit?hit[1]:c.type;
+  if(c.type==='时间'){
+    const tt=c.tg_type||'none';
+    const tag={none:'不设时间',range:'时间段 '+(c.tg_value||''),point:'定时 '+(c.tg_value||'')}[tt]||tt;
+    const wds=(c.weekdays||[]).map((v,i)=>v?weekTxt[i]:null).filter(Boolean);
+    return `⏰ ${tag}${wds.length&&wds.length<7?' · 周'+wds.join(''):''}`;
+  }
   const val=c.type==='充电状态'?(c.value==1?'充电中':'未充电'):(c.value??'');
   return `${label} ${opTxt[c.op]||c.op} ${val}`;
 }
@@ -601,23 +611,20 @@ function renderTasks(){
 
 function buildEditor(t,i){
   const po=t.push_options||{};
-  const wds=t.weekdays||[false,false,false,false,false,false,false];
-  let weeks='';for(let d=0;d<7;d++)weeks+=`<label style="margin-right:6px"><input type="checkbox" ${wds[d]?'checked':''} onchange="setWd(${i},${d},this.checked)">周${weekTxt[d]}</label>`;
   const conds=condGroupsHtml(i);
   const groups=(configData.receiver_groups||[]);
   const barkOpt=taskHasBark(t)?`<div class="flex-row"><span>提醒音:</span>
       <select onchange="tSet(${i},'push_options.bark_sound',this.value)">${barkSounds.map(s=>`<option ${((po.bark_sound||'alert')===s)?'selected':''}>${s}</option>`).join('')}</select></div>`:'';
-  const ttt=t.time_type||'none';
-  let tvCtl='';
-  if(ttt==='point')tvCtl=`<select onchange="tSet(${i},'time_value',this.value)">${timeOpts(t.time_value)}</select><span class="muted">每日到点触发一次</span>`;
-  else if(ttt==='range'){const pv=String(t.time_value||'22:00-7:00').split('-');tvCtl=`<select onchange="tvSet(${i},'s',this.value)">${timeOpts(pv[0])}</select><span style="font-size:13px">~</span><select onchange="tvSet(${i},'e',this.value)">${timeOpts(pv[1]||'07:00')}</select><span class="muted">可跨夜</span>`;}
-  else tvCtl=`<span class="muted">不设时间 = 按检测周期和提醒间隔循环检查</span>`;
-  const gLogic=(ensureGroups(i).length>1)?`<div class="flex-row"><span><b style="font-size:13px">组间关系：</b></span>
-      <select onchange="gLogicSet(${i},this.value)">
-        <option value="或" ${((t.group_logic)||'或')==='或'?'selected':''}>或（任一组满足即触发）</option>
-        <option value="且" ${t.group_logic==='且'?'selected':''}>且（所有组都满足才触发）</option>
-        <option value="异或" ${t.group_logic==='异或'?'selected':''}>异或（恰好一组满足）</option></select>
-      <span class="muted">对应 AAPS 的 Or / And / Xor</span></div>`:'';
+  const nc=t.notify_chan||{};
+  const chanSel=(kind,name)=>`<select style="min-height:32px;font-size:12px;padding:3px 8px" onchange="tChanSet(${i},'${kind}','${name}',this.value)">
+    <option value="" ${!nc[name]?'selected':''}>跟随接收者设置</option>
+    <option value="wechat" ${nc[name]==='wechat'?'selected':''}>仅微信</option>
+    <option value="bark" ${nc[name]==='bark'?'selected':''}>仅Bark</option>
+    <option value="all" ${nc[name]==='all'?'selected':''}>两个都发</option></select>`;
+  const recvRows=groups.map(g=>{const on=tGroups(i).includes(g.name);
+    return `<div class="recv-line"><label><input type="checkbox" ${on?'checked':''} onchange="tTarget(${i},'g','${g.name}',this.checked)"><b>${g.name}</b><span class="muted">组</span></label>${on?chanSel('g',g.name):''}</div>`;}).join('')
+    +(configData.receivers||[]).map(r=>{const on=tNames(i).includes(r.name);
+    return `<div class="recv-line"><label><input type="checkbox" ${on?'checked':''} onchange="tTarget(${i},'n','${r.name}',this.checked)">${r.name}</label>${on?chanSel('n',r.name):''}</div>`;}).join('');
   return `<div class="task-editor">
     <div class="flex-row"><span>名称：</span>
       <input style="flex:1;min-width:140px" value="${t.name||''}" onchange="tSet(${i},'name',this.value)">
@@ -635,38 +642,26 @@ function buildEditor(t,i){
       </select>
       <span class="muted">本任务用哪个 Nightscout 的数据判定与渲染</span></div>
     <h3>触发条件</h3>
-    <p class="muted" style="margin:0 0 4px;font-size:12px">彩色卡片=分支组：组内「且」全部满足，组间关系可选「或/且/异或」（见下方下拉）。每组可命名、设生效时间（不设时间=按间隔循环 / 时间段 / 定点，定点每日最多一次）、星期几、写本组专属消息（留空用任务统一消息）；消息里可用 {%组名%}</p>
-    ${gLogic}
+    <p class="muted" style="margin:0 0 4px;font-size:12px">彩色卡片=分支组，顺序链条从上到下求值：组内「且」全部满足；加组时选连接词——或=任一分支命中（平级靠左），且=与前面累计结果同真才触发（缩进挂链），非=该组条件全不满足才算命中（缩进挂链）。每组可命名、加条件（含「⏰ 时间」条件：不设时间/时间段/定时+周几，定时每日一次）、写本组专属消息（留空用任务统一消息）；消息里可用 {%组名%}</p>
     <div id="condBox${i}">${conds||'<p class="muted" style="margin:6px 0">无条件 = 到提醒间隔就推送</p>'}</div>
     <button class="btn btn-gray btn-sm" onclick="addCond(${i})">➕ 加条件</button>
-    <h3>提醒频率</h3>
+    <h3>🔔 执行 · 频率</h3>
     <div class="flex-row">
       <select onchange="tSet(${i},'execution_type',this.value)">
         <option value="repeat" ${(t.execution_type||'repeat')==='repeat'?'selected':''}>重复执行</option>
         <option value="once" ${t.execution_type==='once'?'selected':''}>仅一次</option></select>
       <span>间隔</span><input type="number" style="width:80px" value="${Math.round((t.repeat_interval||300)/60)}" onchange="tSet(${i},'repeat_interval',Number(this.value)*60)"><span>分钟</span>
     </div>
-    <h3>生效时间</h3>
-    <div class="flex-row">
-      <select onchange="tSetTt(${i},this.value)">
-        <option value="none" ${ttt==='none'?'selected':''}>⏰ 不设时间</option>
-        <option value="point" ${ttt==='point'?'selected':''}>⏰ 定时</option>
-        <option value="range" ${ttt==='range'?'selected':''}>⏰ 时间段</option></select>
-      ${tvCtl}
-    </div>
-    <div class="flex-row">${weeks}</div>
-    <h3>推送设置</h3>
-    <div class="flex-row"><b style="font-size:13px">接收者分组：</b>
-      ${groups.map(g=>`<label style="display:flex;align-items:center;gap:4px"><input type="checkbox" ${tGroups(i).includes(g.name)?'checked':''} onchange="tTarget(${i},'g','${g.name}',this.checked)"> ${g.name}</label>`).join('')||'<span class="muted">尚无分组，到"📇 接收者"页创建</span>'}</div>
-    <div class="flex-row"><b style="font-size:13px">指定接收者：</b>
-      ${(configData.receivers||[]).map(r=>`<label style="display:flex;align-items:center;gap:4px"><input type="checkbox" ${tNames(i).includes(r.name)?'checked':''} onchange="tTarget(${i},'n','${r.name}',this.checked)"> ${r.name}</label>`).join('')||'<span class="muted">尚无接收者，到"📇 接收者"页添加</span>'}</div>
-    <p class="muted" style="margin:4px 0">已选 ${tGroups(i).length+tNames(i).length}/10 项（分组+接收者合计）· 渠道与Bark级别在"📇 接收者"页配置 · 全不选=推给全部接收者</p>
-    ${barkOpt}
     <div class="flex-row"><b style="font-size:13px">连发：</b>
       <select onchange="tSet(${i},'push_repeat',Number(this.value))">${[1,2,3,4,5].map(n=>`<option value="${n}" ${((t.push_repeat||1)===n)?'selected':''}>${n===1?'不连发（默认）':'连发'+n+'次'}</option>`).join('')}</select>
       <span>间隔</span><select onchange="tSet(${i},'push_gap',Number(this.value))" ${((t.push_repeat||1)>1)?'':'disabled'}>${[1,2,3,4,5,6,7,8,9,10].map(s=>`<option value="${s}" ${((t.push_gap||2)===s)?'selected':''}>${s}秒</option>`).join('')}</select>
       <span class="muted" style="font-size:11px">不容易听见时选连发，微信/Bark 都生效</span></div>
-    <div style="margin-top:6px"><span class="muted">消息模板，可用变量：</span>
+    <h3>👥 执行 · 接收者</h3>
+    ${recvRows||'<p class="muted" style="margin:4px 0">尚无分组/接收者，到"📇 接收者"页添加</p>'}
+    <p class="muted" style="margin:4px 0">已选 ${tGroups(i).length+tNames(i).length}/10 项（分组+接收者合计）· 渠道默认跟随"📇 接收者"页配置，可按人/组覆盖 · 全不选=推给全部接收者</p>
+    ${barkOpt}
+    <h3>消息模板</h3>
+    <div style="margin-top:6px"><span class="muted">可用变量：</span>
       <span class="muted">{当前血糖} {趋势} {5分钟增量} {总IOB} {剩余COB} {手表电量} {充电状态} {手表掉电} {基础率} {剩余药量} {泵状态} {血糖延迟} {泵延迟} {时间}</span></div>
     <textarea style="height:90px;margin-top:6px" onchange="tSet(${i},'msg',this.value)">${t.msg||''}</textarea>
   </div>`;
@@ -709,10 +704,18 @@ function tNames(i){const t=configData.automation_tasks[i];if(!Array.isArray(t.re
 function tTarget(i,kind,name,on){
   const arr=kind==='g'?tGroups(i):tNames(i);
   const k=arr.indexOf(name);
-  if(on){if(k<0)arr.push(name);}else{if(k>=0)arr.splice(k,1);}
+  if(on){if(k<0)arr.push(name);}else{
+    if(k>=0)arr.splice(k,1);
+    if(configData.automation_tasks[i].notify_chan)delete configData.automation_tasks[i].notify_chan[name];
+  }
   const total=tGroups(i).length+tNames(i).length;
   if(total>10){const kk=arr.indexOf(name);if(on&&kk>=0)arr.splice(kk,1);toast('最多选择10项（分组+接收者合计）');}
   renderTasks();
+}
+function tChanSet(i,kind,name,v){
+  const t=configData.automation_tasks[i];
+  if(!t.notify_chan)t.notify_chan={};
+  if(v)t.notify_chan[name]=v;else delete t.notify_chan[name];
 }
 
 function splitGroups(cs){
@@ -722,18 +725,58 @@ function splitGroups(cs){
   return gs;
 }
 // 迁移：旧 conditions（logic="或"=组起点）→ 显式 condition_groups；一次迁移后用新结构
+// 时间归一（AAPS 式）：组级 tg_* 与任务级 time_* 迁为组内首部/尾部"时间"条件（幂等）
+function migrateTimes(i){
+  const t=configData.automation_tasks[i];
+  const gs=t.condition_groups||[];
+  gs.forEach(g=>{
+    const tt=g.tg_type||((g.time_value||g.tg_value)?'range':'none');
+    const tv=(g.tg_value!=null&&g.tg_value!=='')?g.tg_value:(g.time_value||'');
+    const wd=(g.weekdays||[]).map(Boolean);
+    if(tt!=='none'||String(tv||'').trim()||wd.some(Boolean)){
+      g.conds.unshift({type:'时间',op:'==',value:0,logic:'与',tg_type:tt,tg_value:String(tv||''),weekdays:wd});
+    }
+    delete g.tg_type;delete g.tg_value;delete g.time_value;g.weekdays=[];
+  });
+  const tHas=(t.time_type&&t.time_type!=='none')||String(t.time_value||'').trim()||(t.weekdays||[]).some(Boolean);
+  if(tHas){
+    const cond={type:'时间',op:'==',value:0,logic:'与',tg_type:t.time_type||'none',
+      tg_value:String(t.time_value||''),weekdays:(t.weekdays||[]).map(Boolean)};
+    gs.forEach(g=>{g.conds.push(Object.assign({},cond,{weekdays:cond.weekdays.slice()}));});
+    t.time_type='none';t.time_value='';t.weekdays=[false,false,false,false,false,false,false];
+  }
+}
 function ensureGroups(i){
   const t=configData.automation_tasks[i];
-  if(Array.isArray(t.condition_groups))return t.condition_groups;
-  const cs=t.conditions||[];
-  t.condition_groups=splitGroups(cs).map((g,k)=>({
-    name:'组'+(k+1),tg_type:'none',tg_value:'',time_value:'',weekdays:[],msg:'',
-    conds:cs.slice(g.start,g.end).map((c,idx)=>Object.assign({},c,{logic:idx===0?'与':(c.logic==='非'?'非':'与')}))
-  }));
-  delete t.conditions;
+  if(!Array.isArray(t.condition_groups)){
+    const cs=t.conditions||[];
+    t.condition_groups=splitGroups(cs).map((g,k)=>({
+      name:'组'+(k+1),tg_type:'none',tg_value:'',time_value:'',weekdays:[],msg:'',
+      conds:cs.slice(g.start,g.end).map((c,idx)=>Object.assign({},c,{logic:idx===0?'与':(c.logic==='非'?'非':'与')}))
+    }));
+    delete t.conditions;
+  }
+  migrateTimes(i);
   return t.condition_groups;
 }
 function buildCond(c,ti,gi,ci){
+  if(c.type==='时间'){
+    const tt=c.tg_type||'none';
+    const wd=(c.weekdays||[]);
+    let tCtl='';
+    if(tt==='point')tCtl=`<select onchange="cSet(${ti},${gi},${ci},'tg_value',this.value)">${timeOpts(c.tg_value)}</select>`;
+    else if(tt==='range'){const pv=String(c.tg_value||'22:00-7:00').split('-');tCtl=`<select onchange="cSetT2(${ti},${gi},${ci},'s',this.value)">${timeOpts(pv[0])}</select><span style="font-size:12px">~</span><select onchange="cSetT2(${ti},${gi},${ci},'e',this.value)">${timeOpts(pv[1]||'07:00')}</select>`;}
+    const wds=[0,1,2,3,4,5,6].map(d=>`<label style="margin:0 2px"><input type="checkbox" ${wd[d]?'checked':''} onchange="cSetWd(${ti},${gi},${ci},${d},this.checked)">周${weekTxt[d]}</label>`).join('');
+    return `<div class="cond-item" id="cond${ti}_${gi}_${ci}">
+      <select onchange="cSet(${ti},${gi},${ci},'type',this.value)">${typeList.map(([v,n])=>`<option value="${v}" ${c.type===v?'selected':''}>${n}</option>`).join('')}</select>
+      <select onchange="cSet(${ti},${gi},${ci},'tg_type',this.value)">
+        <option value="none" ${tt==='none'?'selected':''}>不设时间</option>
+        <option value="range" ${tt==='range'?'selected':''}>时间段</option>
+        <option value="point" ${tt==='point'?'selected':''}>定时</option></select>
+      ${tCtl||(tt==='none'?'<span class="muted" style="font-size:11px">按间隔循环检查</span>':'')}
+      <span class="muted" style="font-size:12px">${wds}</span>
+      <button class="btn btn-danger btn-sm" onclick="delCond(${ti},${gi},${ci})">✕</button></div>`;
+  }
   const types=typeList.map(([v,n])=>`<option value="${v}" ${c.type===v?'selected':''}>${n}</option>`).join('');
   const isEnum=(c.type==='充电状态'||c.type==='泵状态异常');
   const ops=(isEnum?opList.filter(x=>x[1]==='=='):opList).map(([lbl,v])=>`<option value="${v}" ${c.op===v?'selected':''}>${lbl}</option>`).join('');
@@ -791,9 +834,14 @@ function fallbackCopy(s,done){
 }
 function toggleImport(){const b=document.getElementById('importBox');b.open=!b.open;if(b.open)document.getElementById('importText').focus();}
 function normConds(cs){
-  return (cs||[]).map(c=>({type:String(c.type||'血糖绝对值'),op:String(c.op||'>'),
-    value:(c.value===''||c.value===undefined||c.value===null)?0:c.value,
-    logic:String(c.logic||'与')}));
+  return (cs||[]).map(c=>{
+    if(c.type==='时间')return {type:'时间',op:'==',value:0,logic:String(c.logic||'与'),
+      tg_type:String(c.tg_type||'none'),tg_value:String(c.tg_value||''),
+      weekdays:Array.isArray(c.weekdays)?c.weekdays.map(Boolean):[]};
+    return {type:String(c.type||'血糖绝对值'),op:String(c.op||'>'),
+      value:(c.value===''||c.value===undefined||c.value===null)?0:c.value,
+      logic:String(c.logic||'与')};
+  });
 }
 function normGroups(gs){
   return (gs||[]).filter(g=>g&&Array.isArray(g.conds)&&g.conds.length).map(g=>{
@@ -837,37 +885,31 @@ async function doImport(){
   renderTasks();
   toast('✅ 任务「'+t.name+'」已导入并保存');
 }
-function addNewTask(){  configData.automation_tasks.push({name:'新任务',category:'',ns_source:defaultSrc(),enabled:true,execution_type:'repeat',repeat_interval:300,time_type:'none',time_value:'',weekdays:[false,false,false,false,false,false,false],to_users:[],push_services:['wechat'],push_options:{bark_sound:'alert',bark_badge:1,bark_category:'reminder'},conditions:[],msg:'⚠️ 血糖提醒\n当前血糖: {当前血糖} mmol/L\n趋势: {趋势}\nIOB: {总IOB} COB: {剩余COB}\n时间: {时间}'});
+function addNewTask(){  configData.automation_tasks.push({name:'新任务',category:'',ns_source:defaultSrc(),enabled:true,execution_type:'repeat',repeat_interval:300,time_type:'none',time_value:'',weekdays:[false,false,false,false,false,false,false],to_users:[],push_options:{bark_sound:'alert',bark_badge:1,bark_category:'reminder'},conditions:[],msg:'⚠️ 血糖提醒\n当前血糖: {当前血糖} mmol/L\n趋势: {趋势}\nIOB: {总IOB} COB: {剩余COB}\n时间: {时间}'});
   expandedTaskKey=null;renderTasks();switchTab('tasks',document.querySelectorAll('.tabbtn')[1]);
 }
 function createWatchTasks(){
   if(!confirm('将创建3个任务：\n1. 低电量预警：电量<20%，全天生效，间隔1小时\n2. 充电断开预警：充电状态==未充电 且 30分钟掉电>2%，22:00-7:00，间隔1小时\n3. 充电接触不良预警：充电状态==充电中 且 30分钟掉电>2%，22:00-7:00，间隔1小时\n\n创建后点"⚙设置"可调整，继续？'))return;
   const wd=[false,false,false,false,false,false,false];
-  configData.automation_tasks.push({name:'低电量预警',enabled:true,execution_type:'repeat',repeat_interval:3600,time_type:'none',time_value:'',weekdays:wd.slice(),to_users:[],push_services:['wechat'],push_options:{bark_sound:'alarm',bark_badge:1,bark_category:'warning'},conditions:[{type:'手表电量',op:'<',value:20,logic:'与'}],msg:'🔋 低电量预警\n手表电量: {手表电量}%\n充电状态: {充电状态}\n请及时给孩子手表充电\n当前血糖: {当前血糖} {趋势}\n时间: {时间}'});
-  configData.automation_tasks.push({name:'充电断开预警',enabled:true,execution_type:'repeat',repeat_interval:3600,time_type:'range',time_value:'22:00-7:00',weekdays:wd.slice(),to_users:[],push_services:['wechat'],push_options:{bark_sound:'alarm',bark_badge:1,bark_category:'warning'},conditions:[{type:'充电状态',op:'==',value:0,logic:'与'},{type:'手表掉电(30分钟)',op:'>',value:2,logic:'与'}],msg:'⚠️ 充电断开预警\n充电状态: {充电状态}\n30分钟掉了{手表掉电}%\n手表可能被震离充电器，请检查\n时间: {时间}'});
-  configData.automation_tasks.push({name:'充电接触不良预警',enabled:true,execution_type:'repeat',repeat_interval:3600,time_type:'range',time_value:'22:00-7:00',weekdays:wd.slice(),to_users:[],push_services:['wechat'],push_options:{bark_sound:'alarm',bark_badge:1,bark_category:'warning'},conditions:[{type:'充电状态',op:'==',value:1,logic:'与'},{type:'手表掉电(30分钟)',op:'>',value:2,logic:'与'}],msg:'⚠️ 充电接触不良预警\n充电状态: {充电状态}\n30分钟掉了{手表掉电}%\n显示充电中但电量在下降，请重新放置手表\n时间: {时间}'});
+  configData.automation_tasks.push({name:'低电量预警',enabled:true,execution_type:'repeat',repeat_interval:3600,time_type:'none',time_value:'',weekdays:wd.slice(),to_users:[],push_options:{bark_sound:'alarm',bark_badge:1,bark_category:'warning'},conditions:[{type:'手表电量',op:'<',value:20,logic:'与'}],msg:'🔋 低电量预警\n手表电量: {手表电量}%\n充电状态: {充电状态}\n请及时给孩子手表充电\n当前血糖: {当前血糖} {趋势}\n时间: {时间}'});
+  configData.automation_tasks.push({name:'充电断开预警',enabled:true,execution_type:'repeat',repeat_interval:3600,weekdays:wd.slice(),to_users:[],push_options:{bark_sound:'alarm',bark_badge:1,bark_category:'warning'},conditions:[{type:'时间',op:'==',value:0,tg_type:'range',tg_value:'22:00-7:00',weekdays:[],logic:'与'},{type:'充电状态',op:'==',value:0,logic:'与'},{type:'手表掉电(30分钟)',op:'>',value:2,logic:'与'}],msg:'⚠️ 充电断开预警\n充电状态: {充电状态}\n30分钟掉了{手表掉电}%\n手表可能被震离充电器，请检查\n时间: {时间}'});
+  configData.automation_tasks.push({name:'充电接触不良预警',enabled:true,execution_type:'repeat',repeat_interval:3600,weekdays:wd.slice(),to_users:[],push_options:{bark_sound:'alarm',bark_badge:1,bark_category:'warning'},conditions:[{type:'时间',op:'==',value:0,tg_type:'range',tg_value:'22:00-7:00',weekdays:[],logic:'与'},{type:'充电状态',op:'==',value:1,logic:'与'},{type:'手表掉电(30分钟)',op:'>',value:2,logic:'与'}],msg:'⚠️ 充电接触不良预警\n充电状态: {充电状态}\n30分钟掉了{手表掉电}%\n显示充电中但电量在下降，请重新放置手表\n时间: {时间}'});
   renderTasks();toast('✅ 已添加3个任务，点"保存全部设置"生效');
 }
 function createOfflineTasks(){
   if(!confirm('将创建3个断线报警任务：\n1. NS数据断线：血糖延迟>20分钟，全天生效，间隔1小时\n2. 泵失联：泵延迟>30分钟，全天生效，间隔1小时\n3. 泵停转/药量低：泵状态异常 或 药量<20U，全天生效，间隔1小时\n\n继续？'))return;
   const wd=[false,false,false,false,false,false,false];
-  configData.automation_tasks.push({name:'NS数据断线',category:'系统',enabled:true,execution_type:'repeat',repeat_interval:3600,time_type:'none',time_value:'',weekdays:wd.slice(),to_users:[],push_services:['wechat'],push_options:{bark_sound:'alarm',bark_badge:1},conditions:[{type:'血糖延迟(分钟)',op:'>',value:20,logic:'与'}],msg:'🚨 NS数据断线报警\n血糖数据已 {血糖延迟} 分钟没有更新\n请检查 手机/手表/网络 是否在线\n时间: {时间}'});
-  configData.automation_tasks.push({name:'泵失联',category:'系统',enabled:true,execution_type:'repeat',repeat_interval:3600,time_type:'none',time_value:'',weekdays:wd.slice(),to_users:[],push_services:['wechat'],push_options:{bark_sound:'alarm',bark_badge:1},conditions:[{type:'泵延迟(分钟)',op:'>',value:30,logic:'与'}],msg:'🚨 泵失联报警\n泵数据已 {泵延迟} 分钟没有更新\n泵可能关机/断开蓝牙，请检查\n当前血糖: {当前血糖} {趋势}\n时间: {时间}'});
-  configData.automation_tasks.push({name:'泵停转/药量低',category:'系统',enabled:true,execution_type:'repeat',repeat_interval:3600,time_type:'none',time_value:'',weekdays:wd.slice(),to_users:[],push_services:['wechat'],push_options:{bark_sound:'alarm',bark_badge:1},conditions:[{type:'泵状态异常',op:'==',value:1,logic:'或'},{type:'泵药量(单位)',op:'<',value:20,logic:'或'}],msg:'🚨 泵异常报警\n泵状态: {泵状态} | 剩余药量: {剩余药量}U\n基础率: {基础率}U/h\n泵可能已停转或需要换药，请立即检查\n时间: {时间}'});
+  configData.automation_tasks.push({name:'NS数据断线',category:'系统',enabled:true,execution_type:'repeat',repeat_interval:3600,time_type:'none',time_value:'',weekdays:wd.slice(),to_users:[],push_options:{bark_sound:'alarm',bark_badge:1},conditions:[{type:'血糖延迟(分钟)',op:'>',value:20,logic:'与'}],msg:'🚨 NS数据断线报警\n血糖数据已 {血糖延迟} 分钟没有更新\n请检查 手机/手表/网络 是否在线\n时间: {时间}'});
+  configData.automation_tasks.push({name:'泵失联',category:'系统',enabled:true,execution_type:'repeat',repeat_interval:3600,time_type:'none',time_value:'',weekdays:wd.slice(),to_users:[],push_options:{bark_sound:'alarm',bark_badge:1},conditions:[{type:'泵延迟(分钟)',op:'>',value:30,logic:'与'}],msg:'🚨 泵失联报警\n泵数据已 {泵延迟} 分钟没有更新\n泵可能关机/断开蓝牙，请检查\n当前血糖: {当前血糖} {趋势}\n时间: {时间}'});
+  configData.automation_tasks.push({name:'泵停转/药量低',category:'系统',enabled:true,execution_type:'repeat',repeat_interval:3600,time_type:'none',time_value:'',weekdays:wd.slice(),to_users:[],push_options:{bark_sound:'alarm',bark_badge:1},conditions:[{type:'泵状态异常',op:'==',value:1,logic:'或'},{type:'泵药量(单位)',op:'<',value:20,logic:'或'}],msg:'🚨 泵异常报警\n泵状态: {泵状态} | 剩余药量: {剩余药量}U\n基础率: {基础率}U/h\n泵可能已停转或需要换药，请立即检查\n时间: {时间}'});
   renderTasks();toast('✅ 已添加3个断线报警任务，点"保存全部设置"生效');
 }
 function delTask(i){if(!confirm('确定删除任务"' +(configData.automation_tasks[i].name||'')+ '"？'))return;configData.automation_tasks.splice(i,1);expandedTaskKey=null;renderTasks();}
 function tSet(i,k,v){if(k.includes('.')){const[a,b]=k.split('.');configData.automation_tasks[i][a]=configData.automation_tasks[i][a]||{};configData.automation_tasks[i][a][b]=v;}else configData.automation_tasks[i][k]=v;}
+function f1(v){const n=Number(v);return isNaN(n)?(v===null||v===undefined?'-':v):n.toFixed(1);}
 function normT(t){t=String(t||'').trim();const m=t.match(/(\d{1,2}):?(\d{2})?/);if(!m)return '00:00';const h=Math.min(23,Math.max(0,parseInt(m[1])));const mi=m[2]?parseInt(m[2]):0;return String(h).padStart(2,'0')+':'+(mi<30?'00':'30');}
 function timeOpts(cur){let h='';for(let k=0;k<48;k++){const t=String(Math.floor(k/2)).padStart(2,'0')+':'+(k%2?'30':'00');h+='<option value="'+t+'" '+(t===normT(cur)?'selected':'')+'>'+t+'</option>';}return h;}
-function tvSet(i,part,v){const t=configData.automation_tasks[i];const cur=String(t.time_value||'22:00-7:00');const p=cur.includes('-')?cur.split('-'):[cur,'07:00'];if(part==='s')p[0]=v;else p[1]=v;t.time_value=p[0]+'-'+p[1];}
-function gSetT(i,gi,part,v){const g=ensureGroups(i)[gi];if(!g)return;const cur=String(g.tg_value||g.time_value||'22:00-7:00');const p=cur.includes('-')?cur.split('-'):[cur,'07:00'];if(part==='s')p[0]=v;else p[1]=v;g.tg_value=p[0]+'-'+p[1];}
-function tSetTt(i,v){tSet(i,'time_type',v);renderTasks();}
-function gSetTg(i,gi,v){gSet(i,gi,'tg_type',v);renderCondBox(i);}
-function gLogicSet(i,v){tSet(i,'group_logic',v);renderCondBox(i);}
-function setWd(i,d,v){const w=configData.automation_tasks[i].weekdays||(configData.automation_tasks[i].weekdays=[false,false,false,false,false,false,false]);w[d]=v;}
 function gSet(ti,gi,k,v){const g=ensureGroups(ti)[gi];if(g)g[k]=v;}
-function setWdG(ti,gi,d,v){const g=ensureGroups(ti)[gi];if(!g)return;if(!Array.isArray(g.weekdays))g.weekdays=[];g.weekdays[d]=v;}
 function toggleGMsg(ti,gi){const el=document.getElementById('gmsg'+ti+'_'+gi);if(el)el.style.display=el.style.display==='none'?'':'none';}
 function addCond(i,gi){
   const gs=ensureGroups(i);
@@ -876,9 +918,9 @@ function addCond(i,gi){
   else gs[gi2].conds.push({type:'血糖绝对值',op:'<',value:'',logic:'与'});
   renderCondBox(i);
 }
-function addOrGroup(i){
+function addGroup(i,logic){
   const gs=ensureGroups(i);
-  gs.push({name:'组'+(gs.length+1),tg_type:'none',tg_value:'',time_value:'',weekdays:[],msg:'',conds:[{type:'血糖绝对值',op:'<',value:'',logic:'与'}]});
+  gs.push({name:'组'+(gs.length+1),logic:logic||'或',tg_type:'none',tg_value:'',time_value:'',weekdays:[],msg:'',conds:[{type:'血糖绝对值',op:'<',value:'',logic:'与'}]});
   renderCondBox(i);
 }
 function delGroup(ti,gi){
@@ -893,36 +935,29 @@ function delCond(ti,gi,ci){
   if(!gs[gi].conds.length)gs.splice(gi,1);  // 组删空自动移除
   renderCondBox(ti);
 }
+const LOGIC_COLOR={'或':'#f59e0b','且':'#2563eb','非':'#e5484d'};
 function condGroupsHtml(i){
   const gs=ensureGroups(i);
   if(!gs.length)return '';
-  const gl=(configData.automation_tasks[i].group_logic)||'或';
-  let html=`<div class="cond-tree"><div class="cond-tree-top">▣ 组间「${gl}」（多组时生效，在上方「组间关系」切换）</div>`;
+  let html='<div class="cond-tree"><div class="cond-tree-top">▣ 顺序链条：从上到下求值，「且/非」组挂在前面累计结果上（缩进显示）；或=任一分支命中</div>';
   gs.forEach((g,gi)=>{
-    if(gi>0)html+=`<div class="or-badge"><span>${gl}</span></div>`;
-    const wd=(g.weekdays||[]).map(Boolean);
-    const tt=g.tg_type||(g.time_value?'range':'none');
-    const tv=(g.tg_value!=null&&g.tg_value!=='')?g.tg_value:(g.time_value||'');
-    let tCtl='';
-    if(tt==='point')tCtl=`<select onchange="gSet(${i},${gi},'tg_value',this.value)">${timeOpts(tv)}</select>`;
-    else if(tt==='range'){const pv=String(tv||'22:00-7:00').split('-');tCtl=`<select onchange="gSetT(${i},${gi},'s',this.value)">${timeOpts(pv[0])}</select><span style="font-size:12px">~</span><select onchange="gSetT(${i},${gi},'e',this.value)">${timeOpts(pv[1]||'07:00')}</select>`;}
-    html+=`<div class="cond-group g${gi%4}"><div class="cond-group-hd">
-      <span class="or-tag">组${gi+1}</span>
+    const logic=g.logic||'或';
+    const lc=LOGIC_COLOR[logic]||'#f59e0b';
+    if(gi>0)html+=`<div class="or-badge"><span style="background:${lc}">${logic}</span></div>`;
+    const tag=gi===0?'<span class="or-tag">组1</span>':`<span class="or-tag" style="background:${lc}">${logic}</span>`;
+    html+=`<div class="cond-group g${gi%4}${logic!=='或'?' g-dep':''}"><div class="cond-group-hd">
+      ${tag}
       <input style="flex:1;min-width:100px;font-size:13px" placeholder="组名（如：夜间严重）" value="${(g.name||'').replace(/"/g,'&quot;')}" onchange="gSet(${i},${gi},'name',this.value)">
       <button class="btn btn-danger btn-sm" style="margin:0" onclick="delGroup(${i},${gi})">🗑</button></div>
-      <div class="cond-group-hd">
-      <select style="flex:none" onchange="gSetTg(${i},${gi},this.value)">
-        <option value="none" ${tt==='none'?'selected':''}>⏰ 不设时间</option>
-        <option value="range" ${tt==='range'?'selected':''}>⏰ 时间段</option>
-        <option value="point" ${tt==='point'?'selected':''}>⏰ 定时</option></select>
-      ${tCtl||(tt==='none'?'<span class="muted" style="font-size:11px">按间隔循环检查</span>':'')}
-      <span class="muted" style="font-size:11px">${[0,1,2,3,4,5,6].map(d=>`<label style="margin:0 2px"><input type="checkbox" ${wd[d]?'checked':''} onchange="setWdG(${i},${gi},${d},this.checked)">${weekTxt[d]}</label>`).join('')}</span></div>
       <div class="cond-group-hd"><a href="javascript:void(0)" class="muted" style="font-size:12px" onclick="toggleGMsg(${i},${gi})">💬 本组消息 ▾</a></div>
       <textarea id="gmsg${i}_${gi}" style="display:none;height:70px;margin:4px 0" placeholder="留空=用任务统一消息；可用 {%组名%} 及其他变量" onchange="gSet(${i},${gi},'msg',this.value)">${(g.msg||'').replace(/</g,'&lt;')}</textarea>`;
     g.conds.forEach((c,ci)=>{html+=buildCond(c,i,gi,ci);});
     html+=`<div style="margin-top:6px"><button class="btn btn-gray btn-sm" onclick="addCond(${i},${gi})">＋ 本组加条件</button></div></div>`;
   });
-  html+='<div class="or-badge"><button class="btn btn-gray btn-sm" onclick="addOrGroup('+i+')">＋ 添加或组</button></div></div>';
+  html+=`<div class="or-badge">
+    <button class="btn btn-gray btn-sm" onclick="addGroup(${i},'或')">➕ 加组[或]</button>
+    <button class="btn btn-sm" style="background:#2563eb;color:#fff" onclick="addGroup(${i},'且')">➕ 加组[且]</button>
+    <button class="btn btn-sm" style="background:#e5484d;color:#fff" onclick="addGroup(${i},'非')">➕ 加组[非]</button></div></div>`;
   return html;
 }
 function renderCondBox(i){
@@ -942,6 +977,18 @@ function cSet(ti,gi,ci,k,v){
   const el=document.getElementById('cond'+ti+'_'+gi+'_'+ci);
   if(el){el.outerHTML=buildCond(c,ti,gi,ci);}
   else{renderCondBox(ti);}
+}
+function cSetT2(ti,gi,ci,part,v){
+  const c=ensureGroups(ti)[gi].conds[ci];
+  const cur=String(c.tg_value||'22:00-7:00');
+  const p=cur.includes('-')?cur.split('-'):[cur,'07:00'];
+  if(part==='s')p[0]=v;else p[1]=v;
+  cSet(ti,gi,ci,'tg_value',p[0]+'-'+p[1]);
+}
+function cSetWd(ti,gi,ci,d,v){
+  const c=ensureGroups(ti)[gi].conds[ci];
+  if(!Array.isArray(c.weekdays))c.weekdays=[false,false,false,false,false,false,false];
+  c.weekdays[d]=v;
 }
 </script>
 </body>
