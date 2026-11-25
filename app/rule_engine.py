@@ -45,6 +45,15 @@ OPS = {
 }
 
 
+def _hm(s):
+    """'H:MM'/'HH:MM' -> 分钟数；非法返回 None。"""
+    try:
+        h, m = s.split(":")
+        return int(h) * 60 + int(m)
+    except (ValueError, AttributeError):
+        return None
+
+
 def render_message(template, snap):
     """渲染消息模板。变量缺失时回退原模板并告警（沿用 v03 行为）。"""
     try:
@@ -134,19 +143,28 @@ def evaluate_time(task, now):
 
     time_ok = True
     if time_type == "point":
+        # 定点触发：当日到达定点时刻(含之后)的第一个采集周期即触发，
+        # 避免采集周期恰好跳过该分钟导致定点任务整日漏触发
         st = task.get("_st", {"last_trigger_date": ""})
-        if current_time == time_val and current_date != st.get("last_trigger_date", ""):
+        want = _hm(time_val)
+        nowm = now.hour * 60 + now.minute
+        if (want is not None and nowm >= want
+                and current_date != st.get("last_trigger_date", "")):
             task["_st"]["last_trigger_date"] = current_date  # 标记今日已触发
             time_ok = True
         else:
             time_ok = False
     elif time_type == "range":
         if "-" in time_val:
-            try:
-                s, e = [x.strip() for x in time_val.split("-", 1)]
-                time_ok = s <= current_time <= e
-            except ValueError:
+            s, e = [x.strip() for x in time_val.split("-", 1)]
+            sm, em = _hm(s), _hm(e)
+            curm = now.hour * 60 + now.minute
+            if sm is None or em is None:
                 time_ok = False
+            elif sm <= em:
+                time_ok = sm <= curm <= em
+            else:
+                time_ok = curm >= sm or curm <= em  # 跨夜时间段，如 22:00-7:00
         else:
             time_ok = False
 
@@ -164,26 +182,36 @@ def check_and_execute(task, snap, config, db, now):
     task_id = task.get("id")
     state = db.get_task_state(task_id)
     task["_st"] = state
+    today = now.strftime("%Y-%m-%d")
 
     if not task.get("enabled", True):
         return False, "任务已禁用"
-    if task.get("execution_type", "repeat") == "once" and state["executed"]:
-        return False, "单次任务已执行过"
     interval = max(int(task.get("repeat_interval", 180)), 10)
     if snap["now_ts"] - state["last"] < interval:
         return False, "未到重复间隔"
 
+    # once 语义 = 每日仅触发一次（保存任务会重置状态，便于修改后立即重测）
+    executed_today = state.get("last_trigger_date", "") == today
+
     time_ok, time_reason = evaluate_time(task, now)
     if not time_ok:
         return False, "时间不满足: %s" % time_reason
+    if task.get("execution_type", "repeat") == "once" and executed_today:
+        if not db.event_exists_today(task.get("name", "未命名任务"), "今日已执行"):
+            db.add_event("INFO", task.get("name", "未命名任务"), "-",
+                         "单次任务今日已执行过，跳过（每日仅触发一次）")
+        return False, "单次任务今日已执行过"
+
     cond_ok, cond_reason = evaluate_conditions(task, snap)
     if not cond_ok:
         return False, "条件不满足: %s" % cond_reason
 
     # 触发：更新状态并推送
+    executed_once = task.get("execution_type", "repeat") == "once"
     db.set_task_state(task_id, last=snap["now_ts"],
-                      last_trigger_date=state.get("last_trigger_date", ""),
-                      executed=(task.get("execution_type", "repeat") == "once"))
+                      last_trigger_date=today if executed_once
+                      else state.get("last_trigger_date", ""),
+                      executed=executed_once)
     message = render_message(task.get("msg", ""), snap)
     results = push_channels.dispatch(task, message, config, db, task_name=task.get("name", "未命名任务"))
     failed = [r for r in results if not r["ok"]]

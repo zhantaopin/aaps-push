@@ -78,3 +78,13 @@ class Database:
             rows = self.conn.execute(
                 "SELECT * FROM events ORDER BY id DESC LIMIT ?", (limit,)).fetchall()
             return [dict(r) for r in rows]
+
+    def event_exists_today(self, task, keyword):
+        """今日是否已写过该任务含关键字的提示事件（用于跳过类提示去重）。"""
+        with self._lock:
+            row = self.conn.execute(
+                "SELECT 1 FROM events WHERE task=? AND detail LIKE ? "
+                "AND substr(ts,1,10)=? LIMIT 1",
+                (task, "%" + keyword + "%",
+                 datetime.now().strftime("%Y-%m-%d"))).fetchone()
+            return row is not None

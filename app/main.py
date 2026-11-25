@@ -138,6 +138,8 @@ def create_app(scheduler, config_store, db, admin_password, secure_cookies=False
             task["id"] = uuid.uuid4().hex[:12]
             tasks.append(task)
         config_store.update(cfg)
+        # 保存即重新生效：清空该任务运行状态（once 当日已触发标记、重复间隔冷却）
+        db.set_task_state(task["id"], last=0.0, last_trigger_date="", executed=False)
         db.add_event("INFO", "任务编辑", "-", "任务已单独保存: %s" % task.get("name"))
         return jsonify({"ok": True, "id": task["id"]})
 
@@ -240,7 +242,8 @@ def create_app(scheduler, config_store, db, admin_password, secure_cookies=False
                 "would_trigger": (task.get("enabled", True)
                                   and time_ok and cond_ok
                                   and not (task.get("execution_type") == "once"
-                                           and task["_st"]["executed"])),
+                                           and task["_st"].get("last_trigger_date")
+                                           == now.strftime("%Y-%m-%d"))),
             })
         return jsonify({"ok": True, "report": report})
 
