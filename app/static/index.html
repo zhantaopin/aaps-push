@@ -79,6 +79,7 @@ table.events tr:last-child td{border-bottom:none;}
 .task-name.off{color:#a8b3c0;text-decoration:line-through;}
 .task-editor{background:#f7fafc;border:1px solid var(--line);border-radius:12px;padding:12px;margin:10px 0 4px;}
 .cond-item{background:#fff;border:1px solid var(--line);padding:9px;border-radius:10px;margin:8px 0;display:flex;flex-wrap:wrap;gap:8px;align-items:center;}
+.cond-sep{margin:10px 0 2px;font-size:12px;font-weight:600;color:var(--blue);border-top:1px dashed var(--line);padding-top:8px;}
 .warn{background:#fff7e8;border:1px solid #ffd591;color:#ad5b00;padding:10px 14px;border-radius:10px;margin-bottom:10px;font-size:13px;}
 .warn.ok{background:#effaf3;border-color:#b7e4c7;color:#1d7a45;}
 details{margin-top:8px;}
@@ -162,10 +163,16 @@ summary{cursor:pointer;color:var(--blue);font-size:14px;font-weight:500;min-heig
   <div class="card tabpane hidden" id="pane-tasks">
     <div class="flex-row">
       <button class="btn btn-primary" onclick="addNewTask()">➕ 新增任务</button>
+      <button class="btn btn-gray" onclick="toggleImport()">📥 导入任务</button>
       <button class="btn btn-success" onclick="createWatchTasks()">🔋 一键创建手表预警</button>
       <button class="btn btn-success" onclick="createOfflineTasks()">🔔 一键创建断线报警</button>
       <button class="btn btn-gray" onclick="dryRun()">🧪 模拟判定</button>
     </div>
+    <details id="importBox" class="recv-sec" style="margin:8px 0"><summary>📋 粘贴任务 JSON（单条导入）</summary>
+      <textarea id="importText" style="height:130px;margin:8px 0" placeholder='{"name":"补糖通知","conditions":[...],"msg":"...","repeat_interval":600,"receiver_names":["爸爸"]}'></textarea>
+      <button class="btn btn-primary btn-sm" onclick="doImport()">确认导入</button>
+      <span class="muted" style="font-size:12px;margin-left:8px">在任意任务编辑器点「📤 复制JSON」可导出分享</span>
+    </details>
     <details id="dryBox" class="warn" style="display:none"><summary style="cursor:pointer;font-weight:600">🧪 模拟判定结果（点击展开/收起）</summary><div id="dryResult" class="muted" style="margin-top:8px"></div></details>
     <div id="taskList"></div>
   </div>
@@ -221,8 +228,8 @@ summary{cursor:pointer;color:var(--blue);font-size:14px;font-weight:500;min-heig
 <div id="toast"></div>
 
 <script>
-const typeList=[["血糖绝对值","血糖绝对值"],["delta(5min)","delta(5min)"],["shortAvgDelta(15min)","短平均增量(15min)"],["longAvgDelta(30min)","长平均增量(30min)"],["总IOB","总IOB"],["大剂量IOB","大剂量IOB"],["基础率IOB","基础率IOB"],["COB","剩余COB"],["最终预测BG","最终预测BG"],["手表电量","手表电量(%)"],["手表离线(分钟)","手表离线(分钟)"],["手表掉电(30分钟)","手表掉电(30分钟)%"],["充电状态","充电状态"],["血糖延迟(分钟)","血糖延迟(分钟)"],["泵延迟(分钟)","泵延迟(分钟)"],["泵状态异常","泵状态异常"],["泵药量(单位)","泵药量(单位)"]];
-const COND_HELP={"血糖绝对值":"当前血糖值(mmol/L或mg/dL)，如\"小于 4\"触发低血糖提醒","delta(5min)":"近5分钟血糖变化速率，负数=在下降，如\"小于 -1\"代表快速下降","shortAvgDelta(15min)":"近15分钟平均变化速率，过滤瞬时波动","longAvgDelta(30min)":"近30分钟平均变化速率，反映整体趋势","总IOB":"体内胰岛素活性总量(单位U)","大剂量IOB":"餐前大剂量剩余活性(单位U)","基础率IOB":"基础量剩余活性(单位U)","COB":"体内未消耗完的碳水(克g)","最终预测BG":"AAPS 对未来的预测血糖值","手表电量":"手表当前电量百分比，如\"小于 20\"提醒充电","手表离线(分钟)":"手表多久没上报数据，如\"大于 60\"可能已关机","手表掉电(30分钟)":"30分钟内电量下降幅度%，如\"大于 2\"提示充电断开","充电状态":"等于\"充电中\"或\"未充电\"，与掉电条件组合判断充电故障","血糖延迟(分钟)":"数据多久没更新，如\"大于 20\"说明手机/手表断连(NS断线)","泵延迟(分钟)":"泵数据多久没更新，如\"大于 30\"说明泵失联","泵状态异常":"泵上报状态不是正常时触发(选\"异常\")","泵药量(单位)":"药液剩余量U，如\"小于 20\"提醒换药"};
+const typeList=[["血糖绝对值","血糖绝对值"],["delta(5min)","delta(5min)"],["shortAvgDelta(15min)","短平均增量(15min)"],["longAvgDelta(30min)","长平均增量(30min)"],["总IOB","总IOB"],["大剂量IOB","大剂量IOB"],["基础率IOB","基础率IOB"],["COB","剩余COB"],["最终预测BG","最终预测BG"],["手表电量","手表电量(%)"],["手表离线(分钟)","手表离线(分钟)"],["手表掉电(30分钟)","手表掉电(30分钟)%"],["充电状态","充电状态"],["血糖延迟(分钟)","血糖延迟(分钟)"],["泵延迟(分钟)","泵延迟(分钟)"],["泵状态异常","泵状态异常"],["泵药量(单位)","泵药量(单位)"],["上次大剂量(分钟)","上次大剂量(分钟)"]];
+const COND_HELP={"血糖绝对值":"当前血糖值(mmol/L或mg/dL)，如\"小于 4\"触发低血糖提醒","delta(5min)":"近5分钟血糖变化速率，负数=在下降，如\"小于 -1\"代表快速下降","shortAvgDelta(15min)":"近15分钟平均变化速率，过滤瞬时波动","longAvgDelta(30min)":"近30分钟平均变化速率，反映整体趋势","总IOB":"体内胰岛素活性总量(单位U)","大剂量IOB":"餐前大剂量剩余活性(单位U)","基础率IOB":"基础量剩余活性(单位U)","COB":"体内未消耗完的碳水(克g)","最终预测BG":"AAPS 对未来的预测血糖值","手表电量":"手表当前电量百分比，如\"小于 20\"提醒充电","手表离线(分钟)":"手表多久没上报数据，如\"大于 60\"可能已关机","手表掉电(30分钟)":"30分钟内电量下降幅度%，如\"大于 2\"提示充电断开","充电状态":"等于\"充电中\"或\"未充电\"，与掉电条件组合判断充电故障","血糖延迟(分钟)":"数据多久没更新，如\"大于 20\"说明手机/手表断连(NS断线)","泵延迟(分钟)":"泵数据多久没更新，如\"大于 30\"说明泵失联","泵状态异常":"泵上报状态不是正常时触发(选\"异常\")","泵药量(单位)":"药液剩余量U，如\"小于 20\"提醒换药","上次大剂量(分钟)":"距上次大剂量的分钟数，如\"大于等于 120\"=超过2小时没打大剂量；无记录按0(刚打过)处理"};
 const opList=[["大于",">"],["大于等于",">="],["等于","=="],["小于","<"],["小于等于","<="]];
 const opTxt={">":"大于",">=":"≥","==":"等于","<":"小于","<=":"≤"};
 const logicList=[["与","且"],["或","或"],["非","非"]];
@@ -585,6 +592,7 @@ function buildEditor(t,i){
   return `<div class="task-editor">
     <div class="flex-row"><span>名称：</span>
       <input style="flex:1;min-width:140px" value="${t.name||''}" onchange="tSet(${i},'name',this.value)">
+      <button class="btn btn-gray btn-sm" style="margin:0" onclick="copyTaskJson(${i})">📤 复制JSON</button>
       <button class="btn btn-primary btn-sm" style="margin:0" onclick="saveTask(${i})">💾 保存此任务</button></div>
     <div class="flex-row"><span>分组：</span>
       <select style="flex:1;min-width:140px" onchange="moveCatSel(${i},this.value)">
@@ -597,6 +605,7 @@ function buildEditor(t,i){
       </select>
       <span class="muted">本任务用哪个 Nightscout 的数据判定与渲染</span></div>
     <h3>触发条件</h3>
+    <p class="muted" style="margin:0 0 4px;font-size:12px">「或」把条件分成组：组内全部满足（且）、任一组满足（或）即触发</p>
     <div id="condBox${i}">${conds||'<p class="muted" style="margin:6px 0">无条件 = 到提醒间隔就推送</p>'}</div>
     <button class="btn btn-gray btn-sm" onclick="addCond(${i})">➕ 加条件</button>
     <h3>提醒频率</h3>
@@ -689,7 +698,8 @@ function buildCond(c,ti,ci){
     valCtl=`<input type="number" step="0.01" style="width:80px" value="${c.value??''}" onchange="cSet(${ti},${ci},'value',this.value===''?'':Number(this.value))">`;
   }
   const help=COND_HELP[c.type]||'';
-  return `<div class="cond-item" id="cond${ti}_${ci}">
+  const sep=(ci>0&&(c.logic||'与')==='或')?'<div class="cond-sep">── 或 ──（上面一组全满足即触发）</div>':'';
+  return sep+`<div class="cond-item" id="cond${ti}_${ci}">
     <select onchange="cSet(${ti},${ci},'type',this.value)">${types}</select>
     <select onchange="cSet(${ti},${ci},'op',this.value)">${ops}</select>
     ${valCtl}
@@ -698,8 +708,48 @@ function buildCond(c,ti,ci){
     ${help?`<div class="muted" style="width:100%;font-size:12px">💡 ${help}</div>`:''}</div>`;
 }
 
-function addNewTask(){
-  configData.automation_tasks.push({name:'新任务',category:'',ns_source:defaultSrc(),enabled:true,execution_type:'repeat',repeat_interval:300,time_type:'none',time_value:'',weekdays:[false,false,false,false,false,false,false],to_users:[],push_services:['wechat'],push_options:{bark_sound:'alert',bark_badge:1,bark_category:'reminder'},conditions:[],msg:'⚠️ 血糖提醒\n当前血糖: {当前血糖} mmol/L\n趋势: {趋势}\nIOB: {总IOB} COB: {剩余COB}\n时间: {时间}'});
+function copyTaskJson(i){
+  const t=configData.automation_tasks[i];
+  const s=JSON.stringify(t,null,2);
+  const done=()=>toast('📋 任务 JSON 已复制，可直接分享给他人导入');
+  if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(s).then(done).catch(()=>fallbackCopy(s,done));}
+  else fallbackCopy(s,done);
+}
+function fallbackCopy(s,done){
+  const ta=document.createElement('textarea');ta.value=s;document.body.appendChild(ta);
+  ta.select();try{document.execCommand('copy');done();}catch(e){toast('复制失败，请手动从控制台复制');}
+  document.body.removeChild(ta);
+}
+function toggleImport(){const b=document.getElementById('importBox');b.open=!b.open;if(b.open)document.getElementById('importText').focus();}
+async function doImport(){
+  const ta=document.getElementById('importText');
+  let obj;
+  try{obj=JSON.parse(ta.value);}catch(e){return toast('❌ JSON 格式错误: '+e.message);}
+  if(!obj||typeof obj!=='object'||!obj.name)return toast('❌ 缺少任务名称(name)');
+  if(obj.conditions&&!Array.isArray(obj.conditions))return toast('❌ conditions 必须是数组');
+  const t=Object.assign({},obj);
+  delete t.id;delete t._st;
+  t.enabled=obj.enabled!==false;
+  t.conditions=(obj.conditions||[]).map(c=>({
+    type:String(c.type||'血糖绝对值'),op:String(c.op||'>'),
+    value:(c.value===''||c.value===undefined||c.value===null)?0:c.value,
+    logic:String(c.logic||'与')}));
+  if(!t.execution_type)t.execution_type='repeat';
+  if(!t.repeat_interval)t.repeat_interval=600;
+  if(!t.msg)t.msg='⚠️ 血糖提醒\n当前血糖: {当前血糖} mmol/L\n时间: {时间}';
+  const names=(configData.automation_tasks||[]).map(x=>x.name);
+  if(names.includes(t.name)){let n=2;while(names.includes(t.name+'（导入'+n+'）'))n++;t.name=t.name+'（导入'+n+'）';}
+  const r=await api('/api/task-save',{method:'POST',body:JSON.stringify({task:t})});
+  if(r.status!==200){return toast('❌ 保存失败: '+(r.json&&r.json.error||r.status));}
+  t.id=r.json.id;
+  configData.automation_tasks.push(t);
+  ta.value='';
+  document.getElementById('importBox').open=false;
+  expandedTaskKey=taskKey(t,configData.automation_tasks.length-1);
+  renderTasks();
+  toast('✅ 任务「'+t.name+'」已导入并保存');
+}
+function addNewTask(){  configData.automation_tasks.push({name:'新任务',category:'',ns_source:defaultSrc(),enabled:true,execution_type:'repeat',repeat_interval:300,time_type:'none',time_value:'',weekdays:[false,false,false,false,false,false,false],to_users:[],push_services:['wechat'],push_options:{bark_sound:'alert',bark_badge:1,bark_category:'reminder'},conditions:[],msg:'⚠️ 血糖提醒\n当前血糖: {当前血糖} mmol/L\n趋势: {趋势}\nIOB: {总IOB} COB: {剩余COB}\n时间: {时间}'});
   expandedTaskKey=null;renderTasks();switchTab('tasks',document.querySelectorAll('.tabbtn')[1]);
 }
 function createWatchTasks(){

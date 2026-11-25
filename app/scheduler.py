@@ -120,6 +120,7 @@ class Scheduler:
                     "trend": "➡️ 平稳", "last_entry_ts": 0,
                     "iob": 0.0, "bolus_iob": 0.0, "basal_iob": 0.0, "cob": 0.0,
                     "params": {}, "final_source": "无", "final_value": 0.0,
+                    "last_bolus_ts": 0,
                 })
 
             entries = client.fetch_entries(count=30)
@@ -153,6 +154,13 @@ class Scheduler:
                             sst["params"] = data["params"]
                             self._calc_final_decision(data["params"], sst)
                         break
+
+            # 最近一次大剂量时间（treatments API，供"上次大剂量(分钟)"条件用；失败保留旧值）
+            bolus_ts = client.fetch_last_bolus()
+            if bolus_ts:
+                with self._lock:
+                    if bolus_ts > sst.get("last_bolus_ts", 0):
+                        sst["last_bolus_ts"] = bolus_ts
 
         # 2. 全局合并视图：取所有源中最新的一条（用于状态卡与兼容）
         with self._lock:

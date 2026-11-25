@@ -22,6 +22,7 @@ VAR_MAP = {
     "手表掉电": "WATCH_DROP", "充电状态": "CHARGING",
     "基础率": "BASAL_RATE", "剩余药量": "RESERVOIR",
     "泵状态": "PUMP_STATUS", "血糖延迟": "BG_DELAY", "泵延迟": "PUMP_OFFLINE",
+    "上次大剂量": "BOLUS_AGO",
 }
 
 # 条件类型 -> 快照字段（快照值已经是显示单位）
@@ -36,6 +37,7 @@ COND_FIELDS = {
     "手表掉电(30分钟)": "watch_drop_30m", "充电状态": "watch_charging_flag",
     "血糖延迟(分钟)": "bg_delay_min", "泵延迟(分钟)": "pump_offline_min",
     "泵状态异常": "pump_abnormal_flag", "泵药量(单位)": "reservoir",
+    "上次大剂量(分钟)": "bolus_ago_min",
 }
 
 OPS = {
@@ -88,6 +90,7 @@ def build_context(snap, config):
             "pump_offline_min": snap["ctx"].get("PUMP_OFFLINE"),
             "pump_abnormal_flag": 0 if snap["ctx"].get("PUMP_STATUS") in ("normal", "未知", "") else 1,
             "reservoir": _to_num(snap["ctx"].get("RESERVOIR")),
+            "bolus_ago_min": snap["ctx"].get("BOLUS_AGO"),
         },
     }
 
@@ -101,13 +104,13 @@ def _to_num(val):
 
 
 def evaluate_conditions(task, snap):
-    """多条件判断，返回 (是否满足, 原因说明)。"""
+    """多条件判断（与优先分组）：条件列表按"或"切组，组内全部"与"（"非"=该项取反），
+    组间"或"——任一组全满足即整体成立。返回 (是否满足, 原因说明)。"""
     conditions = task.get("conditions") or []
     if not conditions:
         return True, "无条件(总是触发)"
     fields = build_context(snap, None)["fields"]
-    final_ok = True
-    reasons = []
+    groups = [[]]    # 每组内为"与"，组间"或"
     for cond in conditions:
         cond_type = cond.get("type", "血糖绝对值")
         op = cond.get("op", ">")
@@ -121,17 +124,18 @@ def evaluate_conditions(task, snap):
         except (TypeError, ValueError):
             current = 0.0
         ok = OPS.get(op, lambda a, b: False)(current, threshold)
-        reasons.append("%s %.2f %s %.2f => %s" % (cond_type, current, op, threshold, ok))
-        logic = cond.get("logic", "与")
-        if cond is conditions[0]:
-            final_ok = ok
-        elif logic == "与":
-            final_ok = final_ok and ok
-        elif logic == "或":
-            final_ok = final_ok or ok
-        elif logic == "非":
-            final_ok = final_ok and not ok
-    return final_ok, "; ".join(reasons)
+        reason = "%s %.2f %s %.2f => %s" % (cond_type, current, op, threshold, ok)
+        negate = cond.get("logic", "与") == "非"
+        if negate:
+            ok = not ok
+            reason = "非(%s)" % reason
+        # "或" 开新组，其余并入当前组
+        if cond is not conditions[0] and cond.get("logic", "与") == "或":
+            groups.append([])
+        groups[-1].append((ok, reason))
+    final_ok = any(all(ok for ok, _ in g) for g in groups)
+    reasons = " ‖ ".join(" & ".join(r for _, r in g) for g in groups)
+    return final_ok, reasons
 
 
 def evaluate_time(task, now):
@@ -281,5 +285,8 @@ def build_snapshot_ctx(state, unit, source_name=None):
                          if state.get("pump_ts") else 9999),
         # 血糖延迟（分钟）：按任务绑定源计算；无数据按9999
         "BG_DELAY": (round((time.time() - view_ts / 1000) / 60) if view_ts else 9999),
+        # 上次大剂量距现在分钟数：无记录按0（视为刚打过，">N分钟"类条件不触发，宁漏报不误报）
+        "BOLUS_AGO": (round((time.time() - view.get("last_bolus_ts", 0) / 1000) / 60)
+                      if view.get("last_bolus_ts") else 0),
     }
     return ctx

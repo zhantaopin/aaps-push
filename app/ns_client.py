@@ -79,6 +79,31 @@ class NightscoutClient:
             logging.error("获取devicestatus数据失败: %s", e)
             return None
 
+    def fetch_last_bolus(self):
+        """最新一次大剂量（eventType 含 Bolus 且 insulin>0）的时间戳 ms；无记录或失败返回 None。
+        注意：AAPS 上传的 type 字段是 NORMAL 等归一化值，须用 eventType 判断。"""
+        try:
+            r = self.session.get(
+                f"{self.base_url}/api/v1/treatments.json",
+                params={"count": 100}, headers=self._headers(), timeout=self.timeout)
+            r.raise_for_status()
+            best = 0
+            for t in (r.json() or []):
+                try:
+                    if "bolus" not in (t.get("eventType") or "").lower():
+                        continue
+                    if float(t.get("insulin") or 0) <= 0:
+                        continue
+                    ts = parse_date_ms(t.get("created_at") or t.get("date") or 0)
+                    if ts > best:
+                        best = ts
+                except (TypeError, ValueError):
+                    continue
+            return best or None
+        except Exception as e:
+            logging.error("获取大剂量记录失败: %s", e)
+            return None
+
     def upload_heartbeat(self, device_name, instance_id, now_ms):
         """上报心跳 devicestatus，作为跨机器（云端+手机）选主的共享标记。
         需要 NS 写权限；失败时调度器按单实例模式运行。"""
