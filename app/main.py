@@ -69,7 +69,7 @@ def create_app(scheduler, config_store, db, admin_password, secure_cookies=False
     @app.route("/api/health")
     def health():
         snap = scheduler.snapshot()
-        return jsonify({"ok": True, "version": "1.0-beta01", "is_leader": snap["is_leader"],
+        return jsonify({"ok": True, "version": "1.0-beta02", "is_leader": snap["is_leader"],
                         "instance_id": snap["instance_id"],
                         "data_time": snap["data_time"]})
 

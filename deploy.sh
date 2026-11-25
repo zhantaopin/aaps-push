@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # AAPS 推送服务 v04 一键部署脚本
 # 用法:
-#   ./deploy.sh                 # 默认端口 8300，未指定密码时随机生成并打印
+#   ./deploy.sh                 # 默认端口 8300，默认密码 admin
 #   PORT=9000 ./deploy.sh       # 指定端口
 #   ADMIN_PASSWORD=secret PORT=9000 ./deploy.sh
 set -e
@@ -9,10 +9,9 @@ cd "$(dirname "$0")"
 
 PORT="${PORT:-8300}"
 export PORT
-if [ -z "${ADMIN_PASSWORD}" ]; then
-    ADMIN_PASSWORD="$(openssl rand -hex 8)"
-    echo "未指定 ADMIN_PASSWORD，已随机生成: ${ADMIN_PASSWORD}"
-    echo "（已写入 .env，请妥善保存）"
+ADMIN_PASSWORD="${ADMIN_PASSWORD:-admin}"
+if [ "$ADMIN_PASSWORD" = "admin" ]; then
+    echo "ℹ️ 使用默认密码 admin（公网部署请编辑 .env 修改 ADMIN_PASSWORD 后重新运行）"
 fi
 
 # 写入 .env 供 docker-compose 使用
