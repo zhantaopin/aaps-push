@@ -236,7 +236,9 @@ summary{cursor:pointer;color:var(--blue);font-size:14px;font-weight:500;min-heig
       </div>
     </details>
     <details><summary>🔑 管理密码 / 配置备份</summary>
-      <div class="flex-row"><span>新密码(留空不改)：</span><input style="flex:1;min-width:160px" id="adminPassword" type="password"></div>
+      <div class="flex-row"><span>新密码(留空不改)：</span><input style="flex:1;min-width:160px" id="adminPassword" type="password" autocomplete="new-password"></div>
+      <div class="flex-row"><span>确认新密码：</span><input style="flex:1;min-width:160px" id="adminPassword2" type="password" autocomplete="new-password"></div>
+      <p class="muted" style="margin:0 0 6px">改密后保存即生效，下次登录请使用新密码。</p>
       <div class="flex-row">
         <button class="btn btn-gray btn-sm" onclick="exportConfig()">导出JSON</button>
         <button class="btn btn-gray btn-sm" onclick="importConfig()">导入配置</button>
@@ -338,8 +340,11 @@ function collectConfig(){
   };
 }
 async function saveConfig(){
+  const p1=document.getElementById('adminPassword').value,p2=document.getElementById('adminPassword2').value;
+  if(p1&&p1!==p2){toast('❌ 两次输入的新密码不一致');return;} // 中止整个保存，不写半成品配置
   const r=await api('/api/config',{method:'PUT',body:JSON.stringify(collectConfig())});
-  if(r.status===200){toast('✅ 已保存并立即生效');document.getElementById('adminPassword').value='';loadConfig();}
+  if(r.status===200){toast(p1?'✅ 已保存，新密码立即生效（下次登录用新密码）':'✅ 已保存并立即生效');
+    document.getElementById('adminPassword').value='';document.getElementById('adminPassword2').value='';loadConfig();}
   else toast('❌ 保存失败: '+(r.json.error||r.status));
 }
 async function exportConfig(){

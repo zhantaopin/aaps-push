@@ -57,6 +57,11 @@ def create_app(scheduler, config_store, db, admin_password, secure_cookies=False
     # 登录限速：同一 IP 连续失败 5 次锁定 10 分钟（内存计数，重启即清）
     _login_fails = {}
 
+    def _cur_pwd():
+        """当前生效管理密码：config（界面改过）优先，否则用启动值（env ADMIN_PASSWORD）。
+        每次登录动态读取，界面改密保存后秒级生效、无需重启。"""
+        return config_store.get().get("admin_password") or admin_password
+
     def authorized():
         return session.get("authed") is True
 
@@ -81,7 +86,7 @@ def create_app(scheduler, config_store, db, admin_password, secure_cookies=False
             return jsonify({"ok": False, "error": "尝试过多，%d 秒后再试"
                             % int(rec[1] - time.time())}), 429
         data = request.get_json(silent=True) or {}
-        if data.get("password") == admin_password:
+        if data.get("password") == _cur_pwd():
             _login_fails.pop(ip, None)
             session["authed"] = True
             session.permanent = True
@@ -111,7 +116,7 @@ def create_app(scheduler, config_store, db, admin_password, secure_cookies=False
     @app.route("/api/status")
     def status():
         snap = scheduler.snapshot()
-        snap["password_is_default"] = admin_password == "admin"
+        snap["password_is_default"] = _cur_pwd() == "admin"
         return jsonify(snap)
 
     @app.route("/api/config", methods=["GET"])
@@ -312,6 +317,10 @@ def main():
 
     admin_password = (os.environ.get("ADMIN_PASSWORD")
                       or config_store.get().get("admin_password") or "")
+    if config_store.get().get("admin_password"):
+        logging.info("管理密码来源: config（界面修改过，优先于环境变量）")
+    elif admin_password:
+        logging.info("管理密码来源: 环境变量 ADMIN_PASSWORD")
     if not admin_password:
         if os.environ.get("ALLOW_DEFAULT") == "1":  # 仅限本地开发
             admin_password = "admin"
