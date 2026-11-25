@@ -22,7 +22,7 @@ VAR_MAP = {
     "手表掉电": "WATCH_DROP", "充电状态": "CHARGING",
     "基础率": "BASAL_RATE", "剩余药量": "RESERVOIR",
     "泵状态": "PUMP_STATUS", "血糖延迟": "BG_DELAY", "泵延迟": "PUMP_OFFLINE",
-    "上次大剂量": "BOLUS_AGO",
+    "上次大剂量": "BOLUS_AGO", "组名": "GROUP_NAME",
 }
 
 # 条件类型 -> 快照字段（快照值已经是显示单位）
@@ -56,13 +56,19 @@ def _hm(s):
         return None
 
 
-def render_message(template, snap):
-    """渲染消息模板。变量缺失时回退原模板并告警（沿用 v03 行为）。"""
+def render_message(template, snap, group_name=None):
+    """渲染消息模板。变量缺失时回退原模板并告警（沿用 v03 行为）。
+    group_name 非 None 时提供 {%组名%} 变量（命中分支组的名字）。"""
     try:
         message = template or ""
         for cn, en in VAR_MAP.items():
-            message = re.sub(r"\{%s(:[^}]+)?\}" % cn, r"{%s\1}" % en, message)
-        return message.format(**snap["ctx"])
+            # 兼容两种写法：{%中文变量%} 与 {中文变量}（UI 默认后者）-> {EN}
+            pat = r"\{%?\s*" + re.escape(cn) + r"\s*(:[^}]+)?\s*%?\}"
+            message = re.sub(pat, lambda m, en=en: "{%s%s}" % (en, m.group(1) or ""), message)
+        ctx = dict(snap["ctx"])
+        if group_name is not None:
+            ctx["GROUP_NAME"] = group_name
+        return message.format(**ctx)
     except (KeyError, IndexError, ValueError) as e:
         logging.warning("消息模板格式化错误(缺失变量 %s)，按原样发送: %s", e, template)
         return template or ""
@@ -103,39 +109,110 @@ def _to_num(val):
         return 0.0
 
 
-def evaluate_conditions(task, snap):
-    """多条件判断（与优先分组）：条件列表按"或"切组，组内全部"与"（"非"=该项取反），
-    组间"或"——任一组全满足即整体成立。返回 (是否满足, 原因说明)。"""
+def effective_groups(task):
+    """分支组视图：condition_groups 优先；否则由旧 conditions 按"或"切组兼容。
+    返回 [{name, time_value, weekdays, msg, conds}]，组间"或"、组内"且"。"""
+    cgs = task.get("condition_groups")
+    groups = []
+    if cgs:
+        for k, g in enumerate(cgs):
+            conds = g.get("conds") or []
+            if not conds:
+                continue
+            name = (g.get("name") or "").strip() or "组%d" % (k + 1)
+            groups.append({
+                "name": name,
+                "time_value": str(g.get("time_value", "") or ""),
+                "weekdays": g.get("weekdays") or [],
+                "msg": g.get("msg") or "",
+                "conds": conds,
+            })
+        if groups:
+            return groups
     conditions = task.get("conditions") or []
     if not conditions:
-        return True, "无条件(总是触发)"
+        return []
+    chunks, cur = [], []
+    for i, cond in enumerate(conditions):
+        if i > 0 and cond.get("logic", "与") == "或":
+            if cur:
+                chunks.append(cur)
+            cur = []
+        cur.append(cond)
+    if cur:
+        chunks.append(cur)
+    return [{"name": "组%d" % (i + 1), "time_value": "", "weekdays": [],
+             "msg": "", "conds": cs} for i, cs in enumerate(chunks)]
+
+
+def _eval_cond(cond, fields):
+    """单条件求值，返回 (结果, 原因说明)；"非"=该项取反。"""
+    cond_type = cond.get("type", "血糖绝对值")
+    op = cond.get("op", ">")
+    try:
+        threshold = float(cond.get("value", 0))
+    except (TypeError, ValueError):
+        return False, "条件阈值非法: %r" % cond.get("value")
+    current_raw = fields.get(COND_FIELDS.get(cond_type, ""), 0.0)
+    try:
+        current = float(current_raw)
+    except (TypeError, ValueError):
+        current = 0.0
+    ok = OPS.get(op, lambda a, b: False)(current, threshold)
+    reason = "%s %.2f %s %.2f => %s" % (cond_type, current, op, threshold, ok)
+    if cond.get("logic", "与") == "非":
+        ok = not ok
+        reason = "非(%s)" % reason
+    return ok, reason
+
+
+def evaluate_conditions(task, snap, now=None):
+    """分支组判断：组间"或"（全部组参与评估，不是选一个），组内"且"，
+    组级时间窗（时间段/星期几）不满足的组不参与触发。
+    返回 (是否满足, 原因说明, 命中组名列表[按组顺序])。"""
     fields = build_context(snap, None)["fields"]
-    groups = [[]]    # 每组内为"与"，组间"或"
-    for cond in conditions:
-        cond_type = cond.get("type", "血糖绝对值")
-        op = cond.get("op", ">")
-        try:
-            threshold = float(cond.get("value", 0))
-        except (TypeError, ValueError):
-            return False, "条件阈值非法: %r" % cond.get("value")
-        current_raw = fields.get(COND_FIELDS.get(cond_type, ""), 0.0)
-        try:
-            current = float(current_raw)
-        except (TypeError, ValueError):
-            current = 0.0
-        ok = OPS.get(op, lambda a, b: False)(current, threshold)
-        reason = "%s %.2f %s %.2f => %s" % (cond_type, current, op, threshold, ok)
-        negate = cond.get("logic", "与") == "非"
-        if negate:
-            ok = not ok
-            reason = "非(%s)" % reason
-        # "或" 开新组，其余并入当前组
-        if cond is not conditions[0] and cond.get("logic", "与") == "或":
-            groups.append([])
-        groups[-1].append((ok, reason))
-    final_ok = any(all(ok for ok, _ in g) for g in groups)
-    reasons = " ‖ ".join(" & ".join(r for _, r in g) for g in groups)
-    return final_ok, reasons
+    groups = effective_groups(task)
+    if not groups:
+        return True, "无分支(总是触发)", []
+    toks, hit_names = [], []
+    for g in groups:
+        if now is not None:
+            win_ok = evaluate_window(g["time_value"], g["weekdays"], now)
+            parts = ["时间窗OK" if win_ok else "时间窗外"]
+        else:
+            win_ok, parts = True, []
+        cond_ok = True
+        for cond in g["conds"]:
+            ok, reason = _eval_cond(cond, fields)
+            cond_ok = cond_ok and ok
+            parts.append(reason)
+        group_ok = win_ok and cond_ok
+        if group_ok:
+            hit_names.append(g["name"])
+        toks.append("[%s] %s" % (g["name"], " & ".join(parts)))
+    return bool(hit_names), " ‖ ".join(toks), hit_names
+
+
+def evaluate_window(time_val, weekdays, now):
+    """组级时间窗：时间段（支持 22:00-7:00 跨夜）+ 星期几。均空 = 全天每天。"""
+    tv = str(time_val or "").replace(" ", "")
+    if tv:
+        if "-" not in tv:
+            return False
+        s, e = [x.strip() for x in tv.split("-", 1)]
+        sm, em = _hm(s), _hm(e)
+        if sm is None or em is None:
+            return False
+        curm = now.hour * 60 + now.minute
+        if sm <= em:
+            if not (sm <= curm <= em):
+                return False
+        elif not (curm >= sm or curm <= em):
+            return False
+    if weekdays and any(weekdays):
+        if not weekdays[now.weekday()]:
+            return False
+    return True
 
 
 def evaluate_time(task, now):
@@ -206,24 +283,33 @@ def check_and_execute(task, snap, config, db, now):
                          "单次任务今日已执行过，跳过（每日仅触发一次）")
         return False, "单次任务今日已执行过"
 
-    cond_ok, cond_reason = evaluate_conditions(task, snap)
+    cond_ok, cond_reason, hit_names = evaluate_conditions(task, snap, now)
     if not cond_ok:
         return False, "条件不满足: %s" % cond_reason
 
-    # 触发：更新状态并推送
+    # 触发：消息用第一个命中组的文案（留空则用任务统一消息），{%组名%}=命中组名
+    final_group = None
+    for g in effective_groups(task):
+        if g["name"] in hit_names:
+            final_group = g
+            break
+    group_name = final_group["name"] if final_group else ""
     executed_once = task.get("execution_type", "repeat") == "once"
     db.set_task_state(task_id, last=snap["now_ts"],
                       last_trigger_date=today if executed_once
                       else state.get("last_trigger_date", ""),
                       executed=executed_once)
-    message = render_message(task.get("msg", ""), snap)
+    message = render_message(
+        (final_group.get("msg") if final_group else "") or task.get("msg", ""),
+        snap, group_name=group_name)
     results = push_channels.dispatch(task, message, config, db, task_name=task.get("name", "未命名任务"))
     failed = [r for r in results if not r["ok"]]
     db.add_event("INFO" if not failed else "WARN", task.get("name", "未命名任务"),
                  ",".join(sorted({r["channel"] for r in results}) or "-"),
-                 "触发: %s | %s" % (cond_reason, "全部成功" if not failed
-                                    else "失败: " + "; ".join(r["detail"] for r in failed)))
-    logging.info("任务[%s]触发并推送完成", task.get("name"))
+                 "触发[组:%s]: %s | %s" % (group_name or "-", cond_reason,
+                                          "全部成功" if not failed
+                                          else "失败: " + "; ".join(r["detail"] for r in failed)))
+    logging.info("任务[%s]触发(组:%s)并推送完成", task.get("name"), group_name or "-")
     return True, "触发推送: %s" % cond_reason
 
 

@@ -234,13 +234,14 @@ def create_app(scheduler, config_store, db, admin_password, secure_cookies=False
                 "ctx": rule_engine.build_snapshot_ctx(state, cfg.get("unit", "mmol/L"), src_name),
             }
             time_ok, time_reason = rule_engine.evaluate_time(task, now)
-            cond_ok, cond_reason = rule_engine.evaluate_conditions(task, snap)
+            cond_ok, cond_reason, hit_names = rule_engine.evaluate_conditions(task, snap, now)
             report.append({
                 "name": task.get("name"),
                 "source": src_name or "-",
                 "enabled": task.get("enabled", True),
                 "time_ok": time_ok, "time_reason": time_reason,
                 "conditions_ok": cond_ok, "conditions_reason": cond_reason,
+                "hit_groups": hit_names,
                 "would_trigger": (task.get("enabled", True)
                                   and time_ok and cond_ok
                                   and not (task.get("execution_type") == "once"

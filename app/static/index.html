@@ -603,7 +603,7 @@ function buildEditor(t,i){
     <div class="flex-row"><span>名称：</span>
       <input style="flex:1;min-width:140px" value="${t.name||''}" onchange="tSet(${i},'name',this.value)">
       <button class="btn btn-gray btn-sm" style="margin:0" onclick="copyTaskJson(${i})">📤 复制JSON</button>
-      ${(splitGroups(t.conditions||[]).length>1)?`<button class="btn btn-gray btn-sm" style="margin:0" onclick="splitBranches(${i})">🔀 拆分分支</button>`:''}
+      ${((ensureGroups(i).length>1))?`<button class="btn btn-gray btn-sm" style="margin:0" onclick="splitBranches(${i})">🔀 拆分分支</button>`:''}
       <button class="btn btn-primary btn-sm" style="margin:0" onclick="saveTask(${i})">💾 保存此任务</button></div>
     <div class="flex-row"><span>分组：</span>
       <select style="flex:1;min-width:140px" onchange="moveCatSel(${i},this.value)">
@@ -616,7 +616,7 @@ function buildEditor(t,i){
       </select>
       <span class="muted">本任务用哪个 Nightscout 的数据判定与渲染</span></div>
     <h3>触发条件</h3>
-    <p class="muted" style="margin:0 0 4px;font-size:12px">彩色卡片=一组（组内「且」：全部满足），组间「或」：任一组满足即触发；「＋或组」添加新分组</p>
+    <p class="muted" style="margin:0 0 4px;font-size:12px">彩色卡片=分支组：组内「且」全部满足，组间「或」任一组满足即触发一次。每组可命名/设时间段和星期几/写本组专属消息（留空用任务统一消息）；消息里可用 {%组名%}</p>
     <div id="condBox${i}">${conds||'<p class="muted" style="margin:6px 0">无条件 = 到提醒间隔就推送</p>'}</div>
     <button class="btn btn-gray btn-sm" onclick="addCond(${i})">➕ 加条件</button>
     <h3>提醒频率</h3>
@@ -701,45 +701,53 @@ function splitGroups(cs){
   gs.forEach((g,k)=>{ g.end=(k<gs.length-1)?gs[k+1].start:cs.length; });
   return gs;
 }
-function buildCond(c,ti,ci,grpStart){
+// 迁移：旧 conditions（logic="或"=组起点）→ 显式 condition_groups；一次迁移后用新结构
+function ensureGroups(i){
+  const t=configData.automation_tasks[i];
+  if(Array.isArray(t.condition_groups))return t.condition_groups;
+  const cs=t.conditions||[];
+  t.condition_groups=splitGroups(cs).map((g,k)=>({
+    name:'组'+(k+1),time_value:'',weekdays:[],msg:'',
+    conds:cs.slice(g.start,g.end).map((c,idx)=>Object.assign({},c,{logic:idx===0?'与':(c.logic==='非'?'非':'与')}))
+  }));
+  delete t.conditions;
+  return t.condition_groups;
+}
+function buildCond(c,ti,gi,ci){
   const types=typeList.map(([v,n])=>`<option value="${v}" ${c.type===v?'selected':''}>${n}</option>`).join('');
   const isEnum=(c.type==='充电状态'||c.type==='泵状态异常');
   const ops=(isEnum?opList.filter(x=>x[1]==='=='):opList).map(([lbl,v])=>`<option value="${v}" ${c.op===v?'selected':''}>${lbl}</option>`).join('');
-  const logicCtl=grpStart
-    ?`<span class="or-tag">或</span>`
-    :`<select onchange="cSet(${ti},${ci},'logic',this.value)">${logicList.filter(x=>x[1]!=='或').map(([v,n])=>`<option value="${v}" ${(c.logic||'与')===v?'selected':''}>${n}</option>`).join('')}</select>`;
+  const logicCtl=`<select onchange="cSet(${ti},${gi},${ci},'logic',this.value)">${logicList.filter(x=>x[1]!=='或').map(([v,n])=>`<option value="${v}" ${(c.logic||'与')===v?'selected':''}>${n}</option>`).join('')}</select>`;
   let valCtl;
   if(c.type==='充电状态'){
-    valCtl=`<select onchange="cSet(${ti},${ci},'value',Number(this.value))"><option value="1" ${c.value==1?'selected':''}>充电中</option><option value="0" ${c.value==0?'selected':''}>未充电</option></select>`;
+    valCtl=`<select onchange="cSet(${ti},${gi},${ci},'value',Number(this.value))"><option value="1" ${c.value==1?'selected':''}>充电中</option><option value="0" ${c.value==0?'selected':''}>未充电</option></select>`;
   }else if(c.type==='泵状态异常'){
-    valCtl=`<select onchange="cSet(${ti},${ci},'value',Number(this.value))"><option value="1" ${c.value==1?'selected':''}>异常</option><option value="0" ${c.value==0?'selected':''}>正常</option></select>`;
+    valCtl=`<select onchange="cSet(${ti},${gi},${ci},'value',Number(this.value))"><option value="1" ${c.value==1?'selected':''}>异常</option><option value="0" ${c.value==0?'selected':''}>正常</option></select>`;
   }else{
-    valCtl=`<input type="number" step="0.01" style="width:80px" value="${c.value??''}" onchange="cSet(${ti},${ci},'value',this.value===''?'':Number(this.value))">`;
+    valCtl=`<input type="number" step="0.01" style="width:80px" value="${c.value??''}" onchange="cSet(${ti},${gi},${ci},'value',this.value===''?'':Number(this.value))">`;
   }
   const help=COND_HELP[c.type]||'';
-  return `<div class="cond-item" id="cond${ti}_${ci}">
-    <select onchange="cSet(${ti},${ci},'type',this.value)">${types}</select>
-    <select onchange="cSet(${ti},${ci},'op',this.value)">${ops}</select>
+  return `<div class="cond-item" id="cond${ti}_${gi}_${ci}">
+    <select onchange="cSet(${ti},${gi},${ci},'type',this.value)">${types}</select>
+    <select onchange="cSet(${ti},${gi},${ci},'op',this.value)">${ops}</select>
     ${valCtl}
     ${logicCtl}
-    <button class="btn btn-danger btn-sm" onclick="delCond(${ti},${ci})">✕</button>
+    <button class="btn btn-danger btn-sm" onclick="delCond(${ti},${gi},${ci})">✕</button>
     ${help?`<div class="muted" style="width:100%;font-size:12px">💡 ${help}</div>`:''}</div>`;
 }
 
 async function splitBranches(i){
   const t=configData.automation_tasks[i];
-  const gs=splitGroups(t.conditions||[]);
-  if(gs.length<2)return toast('该任务没有「或」分支可拆');
-  if(!confirm(`把「${t.name}」按 ${gs.length} 个分支拆成 ${gs.length} 个独立任务？\n拆分出的任务默认停用，继承分类/接收者/时间设置，你检查后逐个开启；原任务保持不变。`))return;
+  const gs=ensureGroups(i);
+  if(gs.length<2)return toast('该任务只有 1 个分支组，无需拆分');
+  if(!confirm(`把「${t.name}」的 ${gs.length} 个分支组拆成 ${gs.length} 个独立任务？\n拆出的任务默认停用并继承分类/接收者/时间设置；原任务保持不变。`))return;
   let made=0;
   for(let k=0;k<gs.length;k++){
-    const g=gs[k];
-    const conds=t.conditions.slice(g.start,g.end).map((c,idx)=>Object.assign({},c,{logic:idx===0?'与':(c.logic==='非'?'非':'与')}));
     const nt=Object.assign({},t);
     delete nt.id;delete nt._st;
     nt.name=`${t.name}-分支${k+1}`;
     nt.enabled=false;
-    nt.conditions=conds;
+    nt.condition_groups=[Object.assign({},gs[k],{conds:gs[k].conds.map(c=>Object.assign({},c))})];
     const r=await api('/api/task-save',{method:'POST',body:JSON.stringify({task:nt})});
     if(r.status!==200){toast(`❌ 分支${k+1} 保存失败: `+(r.json&&r.json.error||r.status));return;}
     nt.id=r.json.id;
@@ -747,7 +755,7 @@ async function splitBranches(i){
     made++;
   }
   renderTasks();
-  toast(`✅ 已拆分 ${made} 个分支任务（默认停用），原任务保持不变。可在各任务里分别设置时间窗和消息后逐个开启`);
+  toast(`✅ 已拆分 ${made} 个分支任务（默认停用），原任务保持不变`);
 }
 function copyTaskJson(i){
   const t=configData.automation_tasks[i];
@@ -762,19 +770,34 @@ function fallbackCopy(s,done){
   document.body.removeChild(ta);
 }
 function toggleImport(){const b=document.getElementById('importBox');b.open=!b.open;if(b.open)document.getElementById('importText').focus();}
+function normConds(cs){
+  return (cs||[]).map(c=>({type:String(c.type||'血糖绝对值'),op:String(c.op||'>'),
+    value:(c.value===''||c.value===undefined||c.value===null)?0:c.value,
+    logic:String(c.logic||'与')}));
+}
+function normGroups(gs){
+  return (gs||[]).filter(g=>g&&Array.isArray(g.conds)&&g.conds.length).map(g=>({
+    name:String(g.name||''),time_value:String(g.time_value||''),
+    weekdays:Array.isArray(g.weekdays)?g.weekdays.map(Boolean):[],msg:String(g.msg||''),
+    conds:normConds(g.conds)}));
+}
 async function doImport(){
   const ta=document.getElementById('importText');
   let obj;
   try{obj=JSON.parse(ta.value);}catch(e){return toast('❌ JSON 格式错误: '+e.message);}
   if(!obj||typeof obj!=='object'||!obj.name)return toast('❌ 缺少任务名称(name)');
+  if(obj.condition_groups&&!Array.isArray(obj.condition_groups))return toast('❌ condition_groups 必须是数组');
   if(obj.conditions&&!Array.isArray(obj.conditions))return toast('❌ conditions 必须是数组');
   const t=Object.assign({},obj);
   delete t.id;delete t._st;
   t.enabled=obj.enabled!==false;
-  t.conditions=(obj.conditions||[]).map(c=>({
-    type:String(c.type||'血糖绝对值'),op:String(c.op||'>'),
-    value:(c.value===''||c.value===undefined||c.value===null)?0:c.value,
-    logic:String(c.logic||'与')}));
+  if(Array.isArray(obj.condition_groups)&&obj.condition_groups.length){t.condition_groups=normGroups(obj.condition_groups);}
+  else{  // 旧格式：按"或"切组迁移为显式分支组
+    const cs=normConds(obj.conditions);
+    t.condition_groups=splitGroups(cs).map((g,k)=>({name:'组'+(k+1),time_value:'',weekdays:[],msg:'',
+      conds:cs.slice(g.start,g.end).map((c,idx)=>Object.assign({},c,{logic:idx===0?'与':(c.logic==='非'?'非':'与')}))}));
+    delete t.conditions;
+  }
   if(!t.execution_type)t.execution_type='repeat';
   if(!t.repeat_interval)t.repeat_interval=600;
   if(!t.msg)t.msg='⚠️ 血糖提醒\n当前血糖: {当前血糖} mmol/L\n时间: {时间}';
@@ -812,36 +835,50 @@ function createOfflineTasks(){
 function delTask(i){if(!confirm('确定删除任务"' +(configData.automation_tasks[i].name||'')+ '"？'))return;configData.automation_tasks.splice(i,1);expandedTaskKey=null;renderTasks();}
 function tSet(i,k,v){if(k.includes('.')){const[a,b]=k.split('.');configData.automation_tasks[i][a]=configData.automation_tasks[i][a]||{};configData.automation_tasks[i][a][b]=v;}else configData.automation_tasks[i][k]=v;}
 function setWd(i,d,v){const w=configData.automation_tasks[i].weekdays||(configData.automation_tasks[i].weekdays=[false,false,false,false,false,false,false]);w[d]=v;}
-function addCond(i,gIdx){
-  const cs=configData.automation_tasks[i].conditions||(configData.automation_tasks[i].conditions=[]);
-  const gs=splitGroups(cs);
-  const gi=(gIdx===undefined||gIdx===null||gIdx>=gs.length)?gs.length-1:gIdx;
-  const at=gs.length?gs[gi].end:cs.length;
-  cs.splice(at,0,{type:'血糖绝对值',op:'<',value:'',logic:'与'});
+function gSet(ti,gi,k,v){const g=ensureGroups(ti)[gi];if(g)g[k]=v;}
+function setWdG(ti,gi,d,v){const g=ensureGroups(ti)[gi];if(!g)return;if(!Array.isArray(g.weekdays))g.weekdays=[];g.weekdays[d]=v;}
+function toggleGMsg(ti,gi){const el=document.getElementById('gmsg'+ti+'_'+gi);if(el)el.style.display=el.style.display==='none'?'':'none';}
+function addCond(i,gi){
+  const gs=ensureGroups(i);
+  const gi2=(gi===undefined||gi===null||gi>=gs.length)?gs.length-1:gi;
+  if(gi2<0){gs.push({name:'组1',time_value:'',weekdays:[],msg:'',conds:[{type:'血糖绝对值',op:'<',value:'',logic:'与'}]});}
+  else gs[gi2].conds.push({type:'血糖绝对值',op:'<',value:'',logic:'与'});
   renderCondBox(i);
 }
 function addOrGroup(i){
-  const cs=configData.automation_tasks[i].conditions||(configData.automation_tasks[i].conditions=[]);
-  cs.push({type:'血糖绝对值',op:'<',value:'',logic:cs.length?'或':'与'});
+  const gs=ensureGroups(i);
+  gs.push({name:'组'+(gs.length+1),time_value:'',weekdays:[],msg:'',conds:[{type:'血糖绝对值',op:'<',value:'',logic:'与'}]});
   renderCondBox(i);
 }
-function delCond(ti,ci){
-  const t=configData.automation_tasks[ti];
-  const wasStart=ci>0&&(t.conditions[ci].logic||'与')==='或';
-  t.conditions.splice(ci,1);
-  if(wasStart&&t.conditions[ci])t.conditions[ci].logic='或';  // 组起点被删，下一行接任组起点
-  if(!t.conditions.length)t.conditions=[];
+function delGroup(ti,gi){
+  const gs=ensureGroups(ti);
+  if(!confirm('删除整个分支组「'+(gs[gi].name||'组'+(gi+1))+'」？（含组内全部条件）'))return;
+  gs.splice(gi,1);
+  renderCondBox(ti);
+}
+function delCond(ti,gi,ci){
+  const gs=ensureGroups(ti);
+  gs[gi].conds.splice(ci,1);
+  if(!gs[gi].conds.length)gs.splice(gi,1);  // 组删空自动移除
   renderCondBox(ti);
 }
 function condGroupsHtml(i){
-  const cs=configData.automation_tasks[i].conditions||[];
-  if(!cs.length)return '';
-  const gs=splitGroups(cs);
+  const gs=ensureGroups(i);
+  if(!gs.length)return '';
   let html='<div class="cond-tree"><div class="cond-tree-top">▣ 满足以下任一组</div>';
   gs.forEach((g,gi)=>{
-    if(gi>0)html+='<div class="or-badge"><span>或</span><button class="btn btn-gray btn-sm" onclick="addOrGroup('+i+')">＋或组</button></div>';
-    html+=`<div class="cond-group g${gi%4}"><div class="cond-group-hd"><b>组 ${gi+1}</b><span class="muted">本组全部满足才触发</span></div>`;
-    for(let ci=g.start;ci<g.end;ci++)html+=buildCond(cs[ci],i,ci,ci===g.start&&gi>0);
+    if(gi>0)html+='<div class="or-badge"><span>或</span></div>';
+    const wd=(g.weekdays||[]).map(Boolean);
+    html+=`<div class="cond-group g${gi%4}"><div class="cond-group-hd">
+      <span class="or-tag">组${gi+1}</span>
+      <input style="flex:1;min-width:100px;font-size:13px" placeholder="组名（如：夜间严重）" value="${(g.name||'').replace(/"/g,'&quot;')}" onchange="gSet(${i},${gi},'name',this.value)">
+      <button class="btn btn-danger btn-sm" style="margin:0" onclick="delGroup(${i},${gi})">🗑</button></div>
+      <div class="cond-group-hd"><span class="muted">⏰</span>
+      <input style="flex:1;min-width:100px;font-size:13px" placeholder="时间段 全天（如 22:00-7:00 可跨夜）" value="${g.time_value||''}" onchange="gSet(${i},${gi},'time_value',this.value)">
+      <span class="muted" style="font-size:11px">${[0,1,2,3,4,5,6].map(d=>`<label style="margin:0 2px"><input type="checkbox" ${wd[d]?'checked':''} onchange="setWdG(${i},${gi},${d},this.checked)">${weekTxt[d]}</label>`).join('')}</span></div>
+      <div class="cond-group-hd"><a href="javascript:void(0)" class="muted" style="font-size:12px" onclick="toggleGMsg(${i},${gi})">💬 本组消息 ▾</a></div>
+      <textarea id="gmsg${i}_${gi}" style="display:none;height:70px;margin:4px 0" placeholder="留空=用任务统一消息；可用 {%组名%} 及其他变量" onchange="gSet(${i},${gi},'msg',this.value)">${(g.msg||'').replace(/</g,'&lt;')}</textarea>`;
+    g.conds.forEach((c,ci)=>{html+=buildCond(c,i,gi,ci);});
     html+=`<div style="margin-top:6px"><button class="btn btn-gray btn-sm" onclick="addCond(${i},${gi})">＋ 本组加条件</button></div></div>`;
   });
   html+='<div class="or-badge"><button class="btn btn-gray btn-sm" onclick="addOrGroup('+i+')">＋ 添加或组</button></div></div>';
@@ -852,19 +889,17 @@ function renderCondBox(i){
   if(!box){renderTasks();return;}
   box.innerHTML=condGroupsHtml(i)||'<p class="muted" style="margin:6px 0">无条件 = 到提醒间隔就推送</p>';
 }
-function cSet(ti,ci,k,v){
-  const c=configData.automation_tasks[ti].conditions[ci];
+function cSet(ti,gi,ci,k,v){
+  const c=ensureGroups(ti)[gi].conds[ci];
   if(k==='value'){c.value=(v===''?'':Number(v));}
   else{c[k]=v;}
   if(k==='type'&&(v==='充电状态'||v==='泵状态异常')){
-    // 枚举类型只支持"等于"，取值重置为合法下拉值
     if(c.op!=='==')c.op='==';
     if(c.value!==0&&c.value!==1)c.value=1;
   }
   // 局部更新：只替换当前条件行，不重建整个列表（避免手机上原生下拉被销毁导致必须长按）
-  const el=document.getElementById('cond'+ti+'_'+ci);
-  const grpStart=ci>0&&(c.logic||'与')==='或';
-  if(el){el.outerHTML=buildCond(c,ti,ci,grpStart);}
+  const el=document.getElementById('cond'+ti+'_'+gi+'_'+ci);
+  if(el){el.outerHTML=buildCond(c,ti,gi,ci);}
   else{renderCondBox(ti);}
 }
 </script>
