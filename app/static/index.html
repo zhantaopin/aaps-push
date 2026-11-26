@@ -974,7 +974,9 @@ document.addEventListener('pointercancel',_dgUp,true);
 function tSet(i,k,v){if(k.includes('.')){const[a,b]=k.split('.');configData.automation_tasks[i][a]=configData.automation_tasks[i][a]||{};configData.automation_tasks[i][a][b]=v;}else configData.automation_tasks[i][k]=v;}
 function f1(v){const n=Number(v);return isNaN(n)?(v===null||v===undefined?'-':v):n.toFixed(1);}
 function normT(t){t=String(t||'').trim();const m=t.match(/(\d{1,2})[:：]?(\d{1,2})?/);if(!m)return '00:00';const h=Math.min(23,Math.max(0,parseInt(m[1])));const mi=Math.min(59,Math.max(0,m[2]?parseInt(m[2]):0));return String(h).padStart(2,'0')+':'+String(mi).padStart(2,'0');}
-function timeOpts(cur){const c=normT(cur);let h='',has=false;for(let k=0;k<48;k++){const t=String(Math.floor(k/2)).padStart(2,'0')+':'+(k%2?'30':'00');if(t===c)has=true;h+='<option value="'+t+'" '+(t===c?'selected':'')+'>'+t+'</option>';}h+='<option value="__custom__" '+(has?'':'selected')+'>自定义…</option>';return h;}
+function timeOpts(cur){const c=normT(cur);let h='',has=false;for(let k=0;k<48;k++){const t=String(Math.floor(k/2)).padStart(2,'0')+':'+(k%2?'30':'00');if(t===c)has=true;h+='<option value="'+t+'" '+(t===c?'selected':'')+'>'+t+'</option>';}
+  if(!has)h+='<option value="'+c+'" selected>'+c+'</option>'; // 自定义值直接显示在选中项
+  h+='<option value="__custom__">自定义…</option>';return h;}
 function gSet(ti,gi,k,v){const g=ensureGroups(ti)[gi];if(g)g[k]=v;}
 function toggleGMsg(ti,gi){const el=document.getElementById('gmsg'+ti+'_'+gi);if(el)el.style.display=el.style.display==='none'?'':'none';}
 function addCond(i,gi){
