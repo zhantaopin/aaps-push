@@ -50,6 +50,40 @@ def _dur_at(hist, want):
     return round((hist[-1][0] - start) / 60000, 1)
 
 
+# 趋势方向文本 → 数值（条件"血糖趋势"用：2急升/1升/0平/-1降/-2急降）
+DIR_NUM = {"doubleup": 2, "singleup": 1, "fortyfiveup": 1, "flat": 0,
+           "fortyfivedown": -1, "singledown": -1, "doubledown": -2}
+
+
+def _dir_num(d):
+    return DIR_NUM.get(str(d or "").lower().replace(" ", ""), 0)
+
+
+def _dur_pred(hist, pred):
+    """截至最新点连续满足 pred(bg) 的分钟数；最新点不满足→0；无历史→None。"""
+    if not hist:
+        return None
+    if not pred(hist[-1][1]):
+        return 0
+    start = hist[-1][0]
+    for p in reversed(hist):
+        if not pred(p[1]):
+            break
+        start = p[0]
+    return round((hist[-1][0] - start) / 60000, 1)
+
+
+def _range_at(hist, n_min):
+    """近 n 分钟血糖极差（max−min，mg/dL）；历史未覆盖→None。"""
+    if not hist:
+        return None
+    t0 = hist[-1][0] - n_min * 60000
+    if hist[0][0] > t0 + 10 * 60000:
+        return None
+    vals = [v for ts, v in hist if ts >= t0]
+    return round(max(vals) - min(vals), 1) if vals else None
+
+
 class Scheduler:
     def __init__(self, config_store, db):
         self.config_store = config_store
@@ -67,13 +101,15 @@ class Scheduler:
         # 手表历史：(时间戳ms, 电量%, 充电状态True/False/None)，约6小时窗口，
         # 用于掉电幅度(5/15/30/60分钟)与充电状态历史条件
         self._watch_hist = deque(maxlen=360)
+        # 血糖历史：(时间戳ms, mg/dL)，约1.4天窗口，供连续高/低血糖时长与波动幅度
+        self._bg_hist = deque(maxlen=400)
         # 每个数据源独立状态（增量/IOB/预测），供任务按源绑定
         self._sources_state = {}
 
         # 采集状态（内部统一 mg/dL 口径）
         self._state = {
             "bg": 0.0,            # mg/dL
-            "trend": "➡️ 平稳",
+            "trend": "➡️ 平稳", "trend_dir": 0,
             "delta": 0.0, "short_delta": 0.0, "long_delta": 0.0,  # mg/dL
             "iob": 0.0, "bolus_iob": 0.0, "basal_iob": 0.0,
             "cob": 0.0,
@@ -92,6 +128,9 @@ class Scheduler:
             "reservoir": None,      # 药量 U
             "pump_status": "",      # normal/suspended/...
             "pump_ts": 0,
+            "pump_battery": None,   # 泵电量%（驱动不上报则 None=数据不足）
+            # 血糖历史派生（固定临床阈值 mg/dL：高>180 低<70；不足→None）
+            "bg_high_dur": None, "bg_low_dur": None, "bg_range_30m": None,
             # 多数据源
             "bg_source": "",        # 最新血糖来源源名
             "source_delays": {},    # {源名: 延迟分钟}
@@ -156,10 +195,11 @@ class Scheduler:
                 sst = self._sources_state.setdefault(sname, {
                     "deltas": DeltaCalculator(),
                     "bg": 0.0, "delta": 0.0, "short_delta": 0.0, "long_delta": 0.0,
-                    "trend": "➡️ 平稳", "last_entry_ts": 0,
+                    "trend": "➡️ 平稳", "trend_dir": 0, "last_entry_ts": 0,
                     "iob": 0.0, "bolus_iob": 0.0, "basal_iob": 0.0, "cob": 0.0,
                     "params": {}, "final_source": "无", "final_value": 0.0,
-                    "last_bolus_ts": 0,
+                    "last_bolus_ts": 0, "last_bolus_units": None,
+                    "last_carbs_ts": 0, "last_carbs_g": None,
                 })
 
             entries = client.fetch_entries(count=30)
@@ -177,6 +217,7 @@ class Scheduler:
                         sst["short_delta"] = sst["deltas"].short_avg_delta
                         sst["long_delta"] = sst["deltas"].long_avg_delta
                         sst["trend"] = trend_text(latest.get("direction", "Flat"))
+                        sst["trend_dir"] = _dir_num(latest.get("direction", ""))
 
             statuses = client.fetch_devicestatus(count=60)
             if statuses:
@@ -194,12 +235,16 @@ class Scheduler:
                             self._calc_final_decision(data["params"], sst)
                         break
 
-            # 最近一次大剂量时间（treatments API，供"上次大剂量(分钟)"条件用；失败保留旧值）
-            bolus_ts = client.fetch_last_bolus()
-            if bolus_ts:
+            # 最近一次手动大剂量/碳水（treatments API，供大剂量与碳水条件用；失败保留旧值）
+            bc = client.fetch_bolus_carbs()
+            if bc:
                 with self._lock:
-                    if bolus_ts > sst.get("last_bolus_ts", 0):
-                        sst["last_bolus_ts"] = bolus_ts
+                    if bc["bolus_ts"] and bc["bolus_ts"] > sst.get("last_bolus_ts", 0):
+                        sst["last_bolus_ts"] = bc["bolus_ts"]
+                        sst["last_bolus_units"] = bc["bolus_u"]
+                    if bc["carbs_ts"] and bc["carbs_ts"] > sst.get("last_carbs_ts", 0):
+                        sst["last_carbs_ts"] = bc["carbs_ts"]
+                        sst["last_carbs_g"] = bc["carbs_g"]
 
         # 2. 全局合并视图：取所有源中最新的一条（用于状态卡与兼容）
         with self._lock:
@@ -210,7 +255,7 @@ class Scheduler:
             if newest_name:
                 sst = self._sources_state[newest_name]
                 self._state.update({
-                    "bg": sst["bg"], "trend": sst["trend"],
+                    "bg": sst["bg"], "trend": sst["trend"], "trend_dir": sst.get("trend_dir", 0),
                     "delta": sst["delta"], "short_delta": sst["short_delta"],
                     "long_delta": sst["long_delta"],
                     "iob": sst["iob"], "bolus_iob": sst["bolus_iob"],
@@ -228,6 +273,14 @@ class Scheduler:
                 delays[name] = (round((now_ms - sst["last_entry_ts"]) / 60000.0)
                                 if sst["last_entry_ts"] else 9999)
             self._state["source_delays"] = delays
+            # 血糖历史缓冲（取全局最新源的最新点，去重时间戳）
+            if self._state["last_entry_ts"] and (
+                    not self._bg_hist or self._bg_hist[-1][0] != self._state["last_entry_ts"]):
+                self._bg_hist.append((self._state["last_entry_ts"], self._state["bg"]))
+            bh = list(self._bg_hist)
+            self._state["bg_high_dur"] = _dur_pred(bh, lambda v: v > 180)
+            self._state["bg_low_dur"] = _dur_pred(bh, lambda v: v < 70)
+            self._state["bg_range_30m"] = _range_at(bh, 30)
 
         client = first_client  # 心跳/选主用第一个源
         had_new_data = self._state["bg"] > 0
@@ -269,6 +322,7 @@ class Scheduler:
                 self._state["reservoir"] = newest_pump["reservoir"]
                 self._state["pump_status"] = newest_pump["pump_status"]
                 self._state["pump_ts"] = newest_pump["pump_ts"]
+                self._state["pump_battery"] = newest_pump.get("pump_battery")
 
         # 4. 心跳上报与选主（双端去重的关键）
         is_leader, reason = self._elect_leader(cfg, client)
@@ -390,7 +444,7 @@ class Scheduler:
             "instance_id": self.instance_id,
             "unit": unit,
             "bg": round(s["bg"] / 18, 1) if unit != "mg/dL" else round(s["bg"], 1),
-            "trend": s["trend"],
+            "trend": s["trend"], "trend_dir": s.get("trend_dir", 0),
             "delta": convert_delta_mgdl(s["delta"], unit),
             "short_delta": convert_delta_mgdl(s["short_delta"], unit),
             "long_delta": convert_delta_mgdl(s["long_delta"], unit),
@@ -411,8 +465,12 @@ class Scheduler:
             "basal_rate": (round(s["basal_rate"], 2) if s["basal_rate"] is not None else None),
             "reservoir": s["reservoir"],
             "pump_status": s["pump_status"],
+            "pump_battery": s.get("pump_battery"),
             "pump_offline_min": (round((time.time() - s["pump_ts"] / 1000) / 60)
                                  if s["pump_ts"] else None),
+            # 血糖历史派生与最近大剂量/碳水（调试可见）
+            "bg_high_dur": s.get("bg_high_dur"), "bg_low_dur": s.get("bg_low_dur"),
+            "bg_range_30m": s.get("bg_range_30m"),
             # 多数据源
             "bg_source": s["bg_source"],
             "source_delays": s["source_delays"],

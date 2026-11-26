@@ -115,6 +115,17 @@ summary{cursor:pointer;color:var(--blue);font-size:14px;font-weight:500;min-heig
 .login-box h2{font-size:20px;margin-bottom:4px;}
 .login-box input{width:100%;margin:14px 0;}
 .login-box .btn{width:100%;margin:0;}
+/* ===== 条件说明弹层 ===== */
+#docMask{position:fixed;inset:0;background:rgba(15,25,40,.55);display:none;z-index:60;align-items:flex-start;justify-content:center;padding:24px 10px;overflow-y:auto;}
+.doc-box{background:#fff;border-radius:16px;max-width:640px;width:100%;padding:18px 18px 22px;position:relative;box-shadow:0 20px 60px rgba(0,0,0,.35);}
+.doc-box h2{font-size:17px;margin:2px 40px 10px 0;}
+.doc-close{position:absolute;top:10px;right:12px;border:none;background:#eef2f7;color:#47566b;border-radius:9px;width:34px;height:34px;font-size:16px;cursor:pointer;}
+.doc-cat{font-size:12.5px;font-weight:700;color:var(--blue);margin:14px 2px 6px;letter-spacing:.04em;}
+.doc-item{background:#f7fafc;border:1px solid var(--line);border-radius:12px;padding:11px 13px;margin:8px 0;font-size:13px;line-height:1.75;}
+.doc-item b.nm{font-size:14px;}
+.doc-item .row{margin-top:3px;color:var(--ink2);}
+.doc-item .row b{color:var(--ink);font-weight:600;}
+.doc-item .ex{font-family:ui-monospace,Menlo,monospace;background:#eef2f7;border-radius:6px;padding:1px 7px;color:#1d4ed8;}
 </style>
 </head>
 <body>
@@ -125,6 +136,13 @@ summary{cursor:pointer;color:var(--blue);font-size:14px;font-weight:500;min-heig
     <input type="password" id="loginPwd" placeholder="管理密码" onkeydown="if(event.key==='Enter')doLogin()">
     <button class="btn btn-primary" onclick="doLogin()">登 录</button>
     <p id="loginErr" style="color:var(--red);font-size:13px;margin-top:10px"></p>
+  </div>
+</div>
+
+<div id="docMask" onclick="if(event.target===this)closeDoc()">
+  <div class="doc-box">
+    <button class="doc-close" onclick="closeDoc()">✕</button>
+    <div id="docBody"></div>
   </div>
 </div>
 
@@ -254,9 +272,76 @@ summary{cursor:pointer;color:var(--blue);font-size:14px;font-weight:500;min-heig
 <div id="toast"></div>
 
 <script>
-const typeList=[["时间","⏰ 时间"],["血糖绝对值","血糖绝对值"],["delta(5min)","delta(5min)"],["shortAvgDelta(15min)","短平均增量(15min)"],["longAvgDelta(30min)","长平均增量(30min)"],["总IOB","总IOB"],["大剂量IOB","大剂量IOB"],["基础率IOB","基础率IOB"],["COB","剩余COB"],["最终预测BG","最终预测BG"],["手表电量","手表电量(%)"],["手表离线(分钟)","手表离线(分钟)"],["手表掉电(30分钟)","掉电幅度·30分钟"],["掉电幅度·5分钟","掉电幅度·5分钟"],["掉电幅度·15分钟","掉电幅度·15分钟"],["掉电幅度·60分钟","掉电幅度·60分钟"],["充电状态","充电状态"],["充电状态5分钟前","充电状态·5分钟前"],["充电状态15分钟前","充电状态·15分钟前"],["充电状态30分钟前","充电状态·30分钟前"],["充电状态60分钟前","充电状态·60分钟前"],["连续充电时长(分钟)","连续充电时长(分钟)"],["连续未充时长(分钟)","连续未充时长(分钟)"],["血糖延迟(分钟)","血糖延迟(分钟)"],["泵延迟(分钟)","泵延迟(分钟)"],["泵状态异常","泵状态异常"],["泵药量(单位)","泵药量(单位)"],["上次大剂量(分钟)","上次大剂量(分钟)"]];
-const COND_HELP={"时间":"不设时间=恒真(仅周几过滤)；定时=到点后当日触发一次；时间段支持 22:00-7:00 跨夜。周几不勾=每天都有效","血糖绝对值":"当前血糖值(mmol/L或mg/dL)，如\"小于 4\"触发低血糖提醒","delta(5min)":"近5分钟血糖变化速率，负数=在下降，如\"小于 -1\"代表快速下降","shortAvgDelta(15min)":"近15分钟平均变化速率，过滤瞬时波动","longAvgDelta(30min)":"近30分钟平均变化速率，反映整体趋势","总IOB":"体内胰岛素活性总量(单位U)","大剂量IOB":"餐前大剂量剩余活性(单位U)","基础率IOB":"基础量剩余活性(单位U)","COB":"体内未消耗完的碳水(克g)","最终预测BG":"AAPS 对未来的预测血糖值","手表电量":"手表当前电量百分比，如\"小于 20\"提醒充电","手表离线(分钟)":"手表多久没上报数据，如\"大于 60\"可能已关机","手表掉电(30分钟)":"最近30分钟内电量下降的百分点数（原\"手表掉电30分钟\"），如\"大于 2\"表示掉了超过2%","掉电幅度·5分钟":"最近5分钟内电量下降百分点数，反应快适合快速确认掉电","掉电幅度·15分钟":"最近15分钟内电量下降百分点数","掉电幅度·60分钟":"最近60分钟内电量下降百分点数，平滑适合慢掉电","充电状态":"当前时刻在充电/未充电（瞬时值）","充电状态5分钟前":"约5分钟前那一刻是否在充电；与\"充电状态\"组合可判断刚发生的变化","充电状态15分钟前":"约15分钟前那一刻是否在充电","充电状态30分钟前":"约30分钟前那一刻是否在充电。充电断开=\"30分钟前充电中 且 当前未充电 且 掉电>2\"，从未充电的手表不会误报","充电状态60分钟前":"约60分钟前那一刻是否在充电","连续充电时长(分钟)":"截至当前连续处于充电中的分钟数（当前未充电=0）。≥30 表示过去半小时一直稳定在充","连续未充时长(分钟)":"截至当前连续未充电的分钟数（当前在充=0）。≥5 可过滤拔掉又插回的抖动。⚠️ 以上历史类条件在服务重启后需积累约N+30分钟数据才生效，不足一律视为不满足（不误报）","血糖延迟(分钟)":"数据多久没更新，如\"大于 20\"说明手机/手表断连(NS断线)","泵延迟(分钟)":"泵数据多久没更新，如\"大于 30\"说明泵失联","泵状态异常":"泵上报状态不是正常时触发(选\"异常\")","泵药量(单位)":"药液剩余量U，如\"小于 20\"提醒换药","上次大剂量(分钟)":"距上次大剂量的分钟数，如\"大于等于 120\"=超过2小时没打大剂量；无记录按0(刚打过)处理"};
+const COND_CATS=[
+ ["血糖与增量",[["血糖绝对值","血糖绝对值"],["delta(5min)","delta(5min)"],["shortAvgDelta(15min)","短平均增量(15min)"],["longAvgDelta(30min)","长平均增量(30min)"],["血糖趋势","血糖趋势"],["波动幅度·30分钟","波动幅度·30分钟"],["连续高血糖时长(分钟)","连续高血糖时长(分钟)"],["连续低血糖时长(分钟)","连续低血糖时长(分钟)"]]],
+ ["大剂量与碳水",[["上次大剂量(分钟)","上次大剂量(分钟)"],["上次大剂量(单位)","上次大剂量(单位)"],["距上次碳水(分钟)","距上次碳水(分钟)"],["上次碳水(克)","上次碳水(克)"]]],
+ ["预测与IOB",[["最终预测BG","最终预测BG"],["总IOB","总IOB"],["大剂量IOB","大剂量IOB"],["基础率IOB","基础率IOB"],["COB","剩余COB"],["血糖延迟(分钟)","血糖延迟(分钟)"]]],
+ ["手表电量与离线",[["手表电量","手表电量(%)"],["手表离线(分钟)","手表离线(分钟)"]]],
+ ["掉电与充电",[["手表掉电(30分钟)","掉电幅度·30分钟"],["掉电幅度·5分钟","掉电幅度·5分钟"],["掉电幅度·15分钟","掉电幅度·15分钟"],["掉电幅度·60分钟","掉电幅度·60分钟"],["充电状态","充电状态"],["充电状态5分钟前","充电状态·5分钟前"],["充电状态15分钟前","充电状态·15分钟前"],["充电状态30分钟前","充电状态·30分钟前"],["充电状态60分钟前","充电状态·60分钟前"],["连续充电时长(分钟)","连续充电时长(分钟)"],["连续未充时长(分钟)","连续未充时长(分钟)"]]],
+ ["泵",[["泵药量(单位)","泵药量(单位)"],["泵电池电量(%)","泵电池电量(%)"],["当前基础率(单位/小时)","当前基础率(单位/小时)"],["泵状态异常","泵状态异常"],["泵延迟(分钟)","泵延迟(分钟)"]]],
+ ["时间",[["时间","⏰ 时间"]]]];
+const typeList=[].concat.apply([],COND_CATS.map(c=>c[1]));
+function typeOpts(sel){return COND_CATS.map(([cat,items])=>`<optgroup label="${cat}">${items.map(([v,n])=>`<option value="${v}" ${sel===v?'selected':''}>${n}</option>`).join('')}</optgroup>`).join('');}
+const COND_HELP={"时间":"不设时间=恒真(仅周几过滤)；定时=到点后当日触发一次；时间段支持 22:00-7:00 跨夜。周几不勾=每天都有效","血糖绝对值":"当前血糖值(mmol/L或mg/dL)，如\"小于 4\"触发低血糖提醒","delta(5min)":"近5分钟血糖变化速率，负数=在下降，如\"小于 -1\"代表快速下降","shortAvgDelta(15min)":"近15分钟平均变化速率，过滤瞬时波动","longAvgDelta(30min)":"近30分钟平均变化速率，反映整体趋势","总IOB":"体内胰岛素活性总量(单位U)","大剂量IOB":"餐前大剂量剩余活性(单位U)","基础率IOB":"基础量剩余活性(单位U)","COB":"体内未消耗完的碳水(克g)","最终预测BG":"AAPS 对未来的预测血糖值","手表电量":"手表当前电量百分比，如\"小于 20\"提醒充电","手表离线(分钟)":"手表多久没上报数据，如\"大于 60\"可能已关机","手表掉电(30分钟)":"最近30分钟内电量下降的百分点数（原\"手表掉电30分钟\"），如\"大于 2\"表示掉了超过2%","掉电幅度·5分钟":"最近5分钟内电量下降百分点数，反应快适合快速确认掉电","掉电幅度·15分钟":"最近15分钟内电量下降百分点数","掉电幅度·60分钟":"最近60分钟内电量下降百分点数，平滑适合慢掉电","充电状态":"当前时刻在充电/未充电（瞬时值）","充电状态5分钟前":"约5分钟前那一刻是否在充电；与\"充电状态\"组合可判断刚发生的变化","充电状态15分钟前":"约15分钟前那一刻是否在充电","充电状态30分钟前":"约30分钟前那一刻是否在充电。充电断开=\"30分钟前充电中 且 当前未充电 且 掉电>2\"，从未充电的手表不会误报","充电状态60分钟前":"约60分钟前那一刻是否在充电","连续充电时长(分钟)":"截至当前连续处于充电中的分钟数（当前未充电=0）。≥30 表示过去半小时一直稳定在充","连续未充时长(分钟)":"截至当前连续未充电的分钟数（当前在充=0）。≥5 可过滤拔掉又插回的抖动。⚠️ 以上历史类条件在服务重启后需积累约N+30分钟数据才生效，不足一律视为不满足（不误报）","血糖延迟(分钟)":"数据多久没更新，如\"大于 20\"说明手机/手表断连(NS断线)","泵延迟(分钟)":"泵数据多久没更新，如\"大于 30\"说明泵失联","泵状态异常":"泵上报状态不是正常时触发(选\"异常\")","泵药量(单位)":"药液剩余量U，如\"小于 20\"提醒换药","上次大剂量(分钟)":"距上次手动大剂量的分钟数，如\"大于等于 120\"=超过2小时没打大剂量；只认手动大剂量(餐前/校正)，不含 AAPS 自动 SMB 微剂量；无记录按0(刚打过)处理","上次大剂量(单位)":"最近一次手动大剂量的胰岛素单位数(U)，如\"等于 5\"或\"大于等于 4\"；不含自动 SMB；无记录按0处理","距上次碳水(分钟)":"距最近一次碳水记录(carbs>0)的分钟数，如\"大于等于 360\"=超过6小时没摄入碳水；无记录按0处理","上次碳水(克)":"最近一次记录的碳水克数(g)，如\"大于等于 80\"=上次吃了80g以上；无记录按0处理","当前基础率(单位/小时)":"泵当前基础率 U/h（devicestatus 上报），如\"大于 2\"可捕捉临时基础率飙升；无数据按0","血糖趋势":"CGM 箭头方向：急速上升/上升/平稳/下降/急速下降 五档，只能用\"等于\"。想报\"快速下降低血糖\"=趋势等于急速下降 且 血糖绝对值小于4","波动幅度·30分钟":"最近30分钟血糖最高减最低(mmol/L或mg/dL按单位)，如\"大于 3\"=过山车式波动；历史不足时视为不满足(不误报)","连续高血糖时长(分钟)":"血糖连续高于 10.0 mmol/L(180 mg/dL) 的分钟数，如\"大于等于 60\"=高血糖已1小时；固定临床阈值；重启后需积累约60分钟","连续低血糖时长(分钟)":"血糖连续低于 3.9 mmol/L(70 mg/dL) 的分钟数，如\"大于等于 15\"=低血糖持续15分钟；固定临床阈值","泵电池电量(%)":"泵自身电池百分比（部分驱动如 Dana 只报电压不上报百分比→视为数据不足不误报），如\"小于 20\"提醒换电池"};
 const opList=[["大于",">"],["大于等于",">="],["等于","=="],["小于","<"],["小于等于","<="]];
+const TYPE_CAT={};COND_CATS.forEach(([cat,items])=>items.forEach(([v])=>{TYPE_CAT[v]=cat;}));
+const COND_DOC={
+ "血糖绝对值":{src:"Nightscout entries 最新 sgv",desc:"当前血糖值，内部统一 mg/dL，按配置单位比较（mmol/L 或 mg/dL）",ex:"小于 4 = 低血糖提醒",note:"显示保留一位小数"},
+ "delta(5min)":{src:"最近 30 个血糖点",desc:"官方 AAPS DeltaCalculator：取距今 (2.5, 7.5] 分钟窗口，每个读数与最新值按 5 分钟速率归一后取平均",ex:"小于 -1 = 快速下降",note:"负数=在下降；有效点需 sgv>39 且非填充"},
+ "shortAvgDelta(15min)":{src:"同上",desc:"窗口 15 分钟的平均变化速率，过滤瞬时波动",ex:"小于 -1",note:"空窗口回退用 delta"},
+ "longAvgDelta(30min)":{src:"同上",desc:"窗口 30 分钟的平均变化速率，反映整体趋势",ex:"大于 1 = 持续上升",note:"空窗口回退用 short"},
+ "血糖趋势":{src:"entries 的 direction 箭头字段",desc:"DoubleUp=急速上升 / SingleUp·FortyFiveUp=上升 / Flat=平稳 / 下降类推，共 5 档",ex:"等于 急速下降 且 血糖绝对值 小于 4",note:"只能用「等于」；未知方向按平稳(0)"},
+ "波动幅度·30分钟":{src:"血糖历史缓冲(400点≈1.4天)",desc:"最近 30 分钟内血糖最高减最低（按显示单位）",ex:"大于 3 = 过山车式波动",note:"历史不足（重启后约30分钟内）判不满足，不误报"},
+ "连续高血糖时长(分钟)":{src:"血糖历史缓冲",desc:"血糖连续高于 10.0 mmol/L（180 mg/dL）的分钟数，固定临床阈值",ex:"大于等于 60 = 高血糖已 1 小时",note:"内部 mg/dL 口径，与显示单位无关"},
+ "连续低血糖时长(分钟)":{src:"血糖历史缓冲",desc:"血糖连续低于 3.9 mmol/L（70 mg/dL）的分钟数，固定临床阈值",ex:"大于等于 15 = 低血糖持续 15 分钟",note:"同上"},
+ "上次大剂量(分钟)":{src:"treatments 最近 200 条",desc:"距最近一次手动大剂量的分钟数（eventType 含 bolus、insulin>0、type≠SMB）",ex:"大于等于 120 = 超 2 小时没打",note:"不含 AAPS 自动 SMB 微剂量；无记录按 0（刚打过）防误报"},
+ "上次大剂量(单位)":{src:"treatments 最近 200 条",desc:"最近一次手动大剂量的胰岛素单位数 U（与分钟数同源同一条记录）",ex:"等于 5 / 大于等于 4",note:"无记录按 0；等于 0 可判「从没打过」"},
+ "距上次碳水(分钟)":{src:"treatments 最近 200 条",desc:"距最近一条 carbs>0 记录的分钟数（不限 eventType，覆盖纯碳水记录）",ex:"大于等于 360 = 超 6 小时没吃碳水",note:"无记录按 0"},
+ "上次碳水(克)":{src:"treatments 最近 200 条",desc:"最近一条碳水记录的克数 g",ex:"大于等于 80 = 上次吃了 80g 以上",note:"无记录按 0"},
+ "最终预测BG":{src:"devicestatus openaps.suggested",desc:"IOBpredBG/COBpredBG/UAMpredBG/minPredBG 取最小，低于 minGuardBG 时用其兜底（与 v03 一致）",ex:"小于 3.9 = 预测低血糖",note:"决策来源可用 {决策来源} 变量查看"},
+ "总IOB":{src:"devicestatus openaps.iob.iob",desc:"体内活性胰岛素总量 U",ex:"大于 3 = 胰岛素偏多"},
+ "大剂量IOB":{src:"派生 iob−basaliob",desc:"餐前大剂量剩余活性 U",ex:"大于 2"},
+ "基础率IOB":{src:"openaps.iob.basaliob",desc:"基础量剩余活性 U",ex:"大于 1"},
+ "COB":{src:"openaps.cob.cob",desc:"体内未消耗碳水 g；为 0 时从 suggested.reason 正则提取 COB:xx",ex:"大于 30 = 还有较多碳水未吸收"},
+ "血糖延迟(分钟)":{src:"绑定数据源最新 entries 时间戳",desc:"血糖数据多久没更新；无数据按 9999",ex:"大于 20 = 手机/CGM 断连"},
+ "手表电量":{src:"devicestatus.uploaderBattery",desc:"取所有源中最新、非推送服务设备的电量%",ex:"小于 20 = 提醒充电",note:"本质是「跑 AAPS 上传器的设备」电量；手机+手表同时上传时可能读到手机"},
+ "手表离线(分钟)":{src:"最新 devicestatus 时间戳",desc:"AAPS 端多久没向 Nightscout 上报；无数据按 9999",ex:"大于 60 = 可能已关机",note:"手表关机/没网/手机没网/AAPS 进程停都会变大，不只是手表"},
+ "手表掉电(30分钟)":{src:"手表历史缓冲(电量,充电)",desc:"30 分钟前那刻电量 − 当前电量，正值=掉了几个百分点",ex:"大于 2 = 明显掉电",note:"历史不足判不满足"},
+ "掉电幅度·5分钟":{src:"同上",desc:"窗口 5 分钟，反应快适合刚发生的变化",ex:"大于 1"},
+ "掉电幅度·15分钟":{src:"同上",desc:"窗口 15 分钟",ex:"大于 2"},
+ "掉电幅度·60分钟":{src:"同上",desc:"窗口 60 分钟，平滑适合慢掉电",ex:"大于 3"},
+ "充电状态":{src:"devicestatus.isCharging",desc:"当前瞬时是否在充电（充电中=1/未充电=0）",ex:"等于 未充电",note:"与「充电状态30分钟前」组合判断断开事件"},
+ "充电状态5分钟前":{src:"手表历史缓冲",desc:"约 5 分钟前那一刻是否在充电；取距目标时间最近的历史点",ex:"等于 充电中 且 充电状态=未充电 → 刚拔掉",note:"重启后需积累约 35 分钟才生效"},
+ "充电状态15分钟前":{src:"同上",desc:"约 15 分钟前那一刻是否在充电",ex:"等于 充电中",note:"历史不足判不满足"},
+ "充电状态30分钟前":{src:"同上",desc:"约 30 分钟前那一刻是否在充电",ex:"充电断开=30分钟前充电中 且 当前未充 且 掉电>2",note:"从未充电的手表不会误报；历史不足判不满足"},
+ "充电状态60分钟前":{src:"同上",desc:"约 60 分钟前那一刻是否在充电",ex:"等于 充电中"},
+ "连续充电时长(分钟)":{src:"手表历史缓冲",desc:"截至当前连续处于充电中的分钟数；当前未充电=0",ex:"大于等于 30 = 半小时稳定在充",note:"接触不良=连续充电≥30 且 仍在掉电"},
+ "连续未充时长(分钟)":{src:"手表历史缓冲",desc:"截至当前连续未充电的分钟数；当前在充=0",ex:"大于等于 5 = 过滤拔掉又插回的抖动"},
+ "泵药量(单位)":{src:"devicestatus pump.reservoir",desc:"药液剩余量 U",ex:"小于 20 = 提醒换药",note:"无数据按 0"},
+ "泵电池电量(%)":{src:"devicestatus pump.battery.percent",desc:"泵自身电池百分比",ex:"小于 20 = 提醒换泵电池",note:"部分驱动（如 Dana）只报电压不报百分比→视为数据不足，不误报"},
+ "当前基础率(单位/小时)":{src:"pump.extended.BaseBasalRate",desc:"泵当前基础率 U/h",ex:"大于 2 = 临时基础率飙升",note:"无数据按 0"},
+ "泵状态异常":{src:"pump.status.status",desc:"状态文本不是 normal 即判异常（1/0）",ex:"等于 异常",note:"只能用「等于」"},
+ "泵延迟(分钟)":{src:"pump.status.timestamp",desc:"泵数据多久没更新；无数据按 9999",ex:"大于 30 = 泵失联"},
+ "时间":{src:"服务器本地时钟 + 周几",desc:"三态：不设时间=恒真(仅周几过滤)；时间段=窗口内为真(支持 22:00-7:00 跨夜)；定时=到点后仅 2 分钟内为真，每日只触发一次",ex:"时间段 22:00-7:00 夜间监控",note:"周几任一勾选则仅这些天生效；定时错过当天不补发"}};
+function showCondDoc(t){
+  const box=document.getElementById('docBody');
+  const one=(k)=>{const d=COND_DOC[k]||{};
+    return '<div class="doc-item"><b class="nm">'+k+'</b>'+
+      '<div class="row"><b>数据源：</b>'+(d.src||'-')+'</div>'+
+      '<div class="row"><b>怎么算：</b>'+(d.desc||'-')+'</div>'+
+      (d.ex?'<div class="row"><b>示例：</b><span class="ex">'+d.ex+'</span></div>':'')+
+      (d.note?'<div class="row"><b>注意：</b>'+d.note+'</div>':'')+'</div>';};
+  let h='';
+  if(t==='all'){
+    h='<h2>📖 条件说明（共 '+typeList.length+' 项）</h2>';
+    COND_CATS.forEach(([cat,items])=>{h+='<div class="doc-cat">▍'+cat+'</div>'+items.map(([v])=>one(v)).join('');});
+  }else{
+    h='<h2>'+t+'</h2>'+(TYPE_CAT[t]?'<div class="muted" style="margin:-4px 0 6px;font-size:12px">分类：'+TYPE_CAT[t]+'</div>':'')+one(t);
+  }
+  box.innerHTML=h;
+  document.getElementById('docMask').style.display='flex';
+}
+function closeDoc(){document.getElementById('docMask').style.display='none';}
 const opTxt={">":"大于",">=":"≥","==":"等于","<":"小于","<=":"≤"};
 const logicList=[["与","且"],["或","或"],["非","非"]];
 const weekTxt=["一","二","三","四","五","六","日"];
@@ -651,7 +736,7 @@ function buildEditor(t,i){
         ${(configData.ns_sources||[]).map(s=>`<option value="${s.name}" ${(t.ns_source||defaultSrc())===s.name?'selected':''}>${s.name}</option>`).join('')||'<option value="">未配置数据源</option>'}
       </select>
       <span class="muted">本任务用哪个 Nightscout 的数据判定与渲染</span></div>
-    <h3>触发条件</h3>
+    <h3 style="display:flex;align-items:center;gap:8px">触发条件 <button class="btn btn-gray btn-sm" style="margin:0;padding:4px 10px;min-height:28px;font-size:12px" onclick="showCondDoc('all')">📖 条件说明</button></h3>
     <p class="muted" style="margin:0 0 4px;font-size:12px">彩色卡片=分支组，顺序链条从上到下求值：组内「且」全部满足；加组时选连接词——或=任一分支命中（平级靠左），且=与前面累计结果同真才触发（缩进挂链），非=该组条件全不满足才算命中（缩进挂链）。每组可命名、加条件（含「⏰ 时间」条件：不设时间/时间段/定时+周几，定时每日一次）、写本组专属消息（留空用任务统一消息）；消息里可用 {%组名%}</p>
     <div id="condBox${i}">${conds||'<p class="muted" style="margin:6px 0">无条件 = 到提醒间隔就推送</p>'}</div>
     <button class="btn btn-gray btn-sm" onclick="addCond(${i})">➕ 加条件</button>
@@ -672,7 +757,7 @@ function buildEditor(t,i){
     ${barkOpt}
     <h3>消息模板</h3>
     <div style="margin-top:6px"><span class="muted">可用变量：</span>
-      <span class="muted">{当前血糖} {趋势} {5分钟增量} {总IOB} {剩余COB} {手表电量} {充电状态} {手表掉电} {基础率} {剩余药量} {泵状态} {血糖延迟} {泵延迟} {时间}</span></div>
+      <span class="muted">{当前血糖} {趋势} {5分钟增量} {总IOB} {剩余COB} {手表电量} {充电状态} {手表掉电} {基础率} {剩余药量} {泵状态} {血糖延迟} {泵延迟} {时间} {上次大剂量} {上次大剂量单位} {距上次碳水} {上次碳水} {泵电池电量} {%组名%}</span></div>
     <textarea style="height:90px;margin-top:6px" onchange="tSet(${i},'msg',this.value)">${t.msg||''}</textarea>
   </div>`;
 }
@@ -778,17 +863,18 @@ function buildCond(c,ti,gi,ci){
     else if(tt==='range'){const pv=String(c.tg_value||'22:00-7:00').split('-');tCtl=`<select id="time${ti}_${gi}_${ci}_s" onchange="tPick(${ti},${gi},${ci},'s',this.value)">${timeOpts(pv[0])}</select><span style="font-size:12px">~</span><select id="time${ti}_${gi}_${ci}_e" onchange="tPick(${ti},${gi},${ci},'e',this.value)">${timeOpts(pv[1]||'07:00')}</select>`;}
     const wds=[0,1,2,3,4,5,6].map(d=>`<label style="margin:0 2px"><input type="checkbox" ${wd[d]?'checked':''} onchange="cSetWd(${ti},${gi},${ci},${d},this.checked)">周${weekTxt[d]}</label>`).join('');
     return `<div class="cond-item" id="cond${ti}_${gi}_${ci}">
-      <select onchange="cSet(${ti},${gi},${ci},'type',this.value)">${typeList.map(([v,n])=>`<option value="${v}" ${c.type===v?'selected':''}>${n}</option>`).join('')}</select>
+      <select onchange="cSet(${ti},${gi},${ci},'type',this.value)">${typeOpts(c.type)}</select>
       <select onchange="cSet(${ti},${gi},${ci},'tg_type',this.value)">
         <option value="none" ${tt==='none'?'selected':''}>不设时间</option>
         <option value="range" ${tt==='range'?'selected':''}>时间段</option>
         <option value="point" ${tt==='point'?'selected':''}>定时</option></select>
       ${tCtl||(tt==='none'?'<span class="muted" style="font-size:11px">按间隔循环检查</span>':'')}
       <span class="muted" style="font-size:12px">${wds}</span>
+      <button class="btn btn-gray btn-sm" onclick="showCondDoc('时间')">❓</button>
       <button class="btn btn-danger btn-sm" onclick="delCond(${ti},${gi},${ci})">✕</button></div>`;
   }
-  const types=typeList.map(([v,n])=>`<option value="${v}" ${c.type===v?'selected':''}>${n}</option>`).join('');
-  const isEnum=(c.type==='充电状态'||c.type==='泵状态异常'||/^充电状态\d+分钟前$/.test(c.type));
+  const types=typeOpts(c.type);
+  const isEnum=(c.type==='充电状态'||c.type==='泵状态异常'||c.type==='血糖趋势'||/^充电状态\d+分钟前$/.test(c.type));
   const ops=(isEnum?opList.filter(x=>x[1]==='=='):opList).map(([lbl,v])=>`<option value="${v}" ${c.op===v?'selected':''}>${lbl}</option>`).join('');
   const logicCtl=`<select onchange="cSet(${ti},${gi},${ci},'logic',this.value)">${logicList.filter(x=>x[1]!=='或').map(([v,n])=>`<option value="${v}" ${(c.logic||'与')===v?'selected':''}>${n}</option>`).join('')}</select>`;
   let valCtl;
@@ -796,6 +882,8 @@ function buildCond(c,ti,gi,ci){
     valCtl=`<select onchange="cSet(${ti},${gi},${ci},'value',Number(this.value))"><option value="1" ${c.value==1?'selected':''}>充电中</option><option value="0" ${c.value==0?'selected':''}>未充电</option></select>`;
   }else if(c.type==='泵状态异常'){
     valCtl=`<select onchange="cSet(${ti},${gi},${ci},'value',Number(this.value))"><option value="1" ${c.value==1?'selected':''}>异常</option><option value="0" ${c.value==0?'selected':''}>正常</option></select>`;
+  }else if(c.type==='血糖趋势'){
+    valCtl=`<select onchange="cSet(${ti},${gi},${ci},'value',Number(this.value))">${[[2,'⏫ 急速上升'],[1,'🔼 上升'],[0,'➡️ 平稳'],[-1,'🔽 下降'],[-2,'⏬ 急速下降']].map(([v,n])=>`<option value="${v}" ${Number(c.value)===v?'selected':''}>${n}</option>`).join('')}</select>`;
   }else{
     valCtl=`<input type="number" step="0.01" style="width:80px" value="${c.value??''}" onchange="cSet(${ti},${gi},${ci},'value',this.value===''?'':Number(this.value))">`;
   }
@@ -805,6 +893,7 @@ function buildCond(c,ti,gi,ci){
     <select onchange="cSet(${ti},${gi},${ci},'op',this.value)">${ops}</select>
     ${valCtl}
     ${logicCtl}
+    <button class="btn btn-gray btn-sm" onclick="showCondDoc('${c.type}')">❓</button>
     <button class="btn btn-danger btn-sm" onclick="delCond(${ti},${gi},${ci})">✕</button>
     ${help?`<div class="muted" style="width:100%;font-size:12px">💡 ${help}</div>`:''}</div>`;
 }
@@ -1040,6 +1129,10 @@ function cSet(ti,gi,ci,k,v){
   if(k==='type'&&(v==='充电状态'||v==='泵状态异常'||/^充电状态\d+分钟前$/.test(v))){
     if(c.op!=='==')c.op='==';
     if(c.value!==0&&c.value!==1)c.value=1;
+  }
+  if(k==='type'&&v==='血糖趋势'){
+    if(c.op!=='==')c.op='==';
+    if(![-2,-1,0,1,2].includes(Number(c.value)))c.value=0;
   }
   // 局部更新：只替换当前条件行，不重建整个列表（避免手机上原生下拉被销毁导致必须长按）
   const el=document.getElementById('cond'+ti+'_'+gi+'_'+ci);

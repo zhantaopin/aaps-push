@@ -79,29 +79,41 @@ class NightscoutClient:
             logging.error("获取devicestatus数据失败: %s", e)
             return None
 
-    def fetch_last_bolus(self):
-        """最新一次大剂量（eventType 含 Bolus 且 insulin>0）的时间戳 ms；无记录或失败返回 None。
-        注意：AAPS 上传的 type 字段是 NORMAL 等归一化值，须用 eventType 判断。"""
+    def fetch_bolus_carbs(self):
+        """最近一次手动大剂量与碳水（一次 treatments 拉取）。
+        大剂量：eventType 含 bolus、insulin>0、type!=SMB（排除 AAPS 自动微剂量，
+        否则 loop 活跃时"上次大剂量"每 5 分钟被 SMB 刷新，条件永不触发）。
+        碳水：carbs>0 的最新记录（不限 eventType，覆盖纯碳水 Meal Bolus）。
+        返回 {"bolus_ts","bolus_u","carbs_ts","carbs_g"}，缺项为 None；失败返回 None。"""
         try:
             r = self.session.get(
                 f"{self.base_url}/api/v1/treatments.json",
-                params={"count": 100}, headers=self._headers(), timeout=self.timeout)
+                params={"count": 200}, headers=self._headers(), timeout=self.timeout)
             r.raise_for_status()
-            best = 0
+            out = {"bolus_ts": None, "bolus_u": None, "carbs_ts": None, "carbs_g": None}
+            bts = cts = 0
             for t in (r.json() or []):
                 try:
-                    if "bolus" not in (t.get("eventType") or "").lower():
-                        continue
-                    if float(t.get("insulin") or 0) <= 0:
-                        continue
                     ts = parse_date_ms(t.get("created_at") or t.get("date") or 0)
-                    if ts > best:
-                        best = ts
                 except (TypeError, ValueError):
                     continue
-            return best or None
+                if ts > bts and "bolus" in (t.get("eventType") or "").lower():
+                    try:
+                        u = float(t.get("insulin") or 0)
+                    except (TypeError, ValueError):
+                        u = 0
+                    if u > 0 and (t.get("type") or "").upper() != "SMB":
+                        bts, out["bolus_ts"], out["bolus_u"] = ts, ts, u
+                if ts > cts:
+                    try:
+                        g = float(t.get("carbs") or 0)
+                    except (TypeError, ValueError):
+                        g = 0
+                    if g > 0:
+                        cts, out["carbs_ts"], out["carbs_g"] = ts, ts, g
+            return out
         except Exception as e:
-            logging.error("获取大剂量记录失败: %s", e)
+            logging.error("获取大剂量/碳水记录失败: %s", e)
             return None
 
     def upload_heartbeat(self, device_name, instance_id, now_ms):
@@ -174,6 +186,8 @@ def parse_devicestatus(item):
         "basal_rate": _safe_float(((item.get("pump") or {}).get("extended") or {}).get("BaseBasalRate")),
         "reservoir": _safe_float((item.get("pump") or {}).get("reservoir")),
         "pump_status": (((item.get("pump") or {}).get("status") or {}).get("status")) or "",
+        # 泵电池电量%（部分驱动如 Dana 只报 voltage 无 percent → None，条件判数据不足）
+        "pump_battery": _safe_float(((item.get("pump") or {}).get("battery") or {}).get("percent")),
         "pump_ts": parse_date_ms(((item.get("pump") or {}).get("status") or {}).get("timestamp")
                                  or item.get("date", 0)),
     }

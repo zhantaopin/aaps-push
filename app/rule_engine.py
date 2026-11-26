@@ -24,6 +24,8 @@ VAR_MAP = {
     "基础率": "BASAL_RATE", "剩余药量": "RESERVOIR",
     "泵状态": "PUMP_STATUS", "血糖延迟": "BG_DELAY", "泵延迟": "PUMP_OFFLINE",
     "上次大剂量": "BOLUS_AGO", "组名": "GROUP_NAME",
+    "上次大剂量单位": "BOLUS_UNITS", "距上次碳水": "CARBS_AGO", "上次碳水": "CARBS_G",
+    "泵电池电量": "PUMP_BATTERY",
 }
 
 # 条件类型 -> 快照字段（快照值已经是显示单位）
@@ -44,12 +46,19 @@ COND_FIELDS = {
     "血糖延迟(分钟)": "bg_delay_min", "泵延迟(分钟)": "pump_offline_min",
     "泵状态异常": "pump_abnormal_flag", "泵药量(单位)": "reservoir",
     "上次大剂量(分钟)": "bolus_ago_min",
+    # v8 新增（专家建议全量）
+    "上次大剂量(单位)": "bolus_units",
+    "距上次碳水(分钟)": "carbs_ago_min", "上次碳水(克)": "carbs_g",
+    "当前基础率(单位/小时)": "basal_rate", "血糖趋势": "trend_dir",
+    "连续高血糖时长(分钟)": "bg_high_dur", "连续低血糖时长(分钟)": "bg_low_dur",
+    "波动幅度·30分钟": "bg_range_30m", "泵电池电量(%)": "pump_battery",
 }
 
 # 基于历史的严格字段：数据不足(None)一律判不满足，防止重启/历史短误报
 _STRICT_FIELDS = {"watch_chg_5m", "watch_chg_15m", "watch_chg_30m", "watch_chg_60m",
                   "watch_chg_dur", "watch_nochg_dur",
-                  "watch_drop_5m", "watch_drop_15m", "watch_drop_60m"}
+                  "watch_drop_5m", "watch_drop_15m", "watch_drop_60m",
+                  "bg_high_dur", "bg_low_dur", "bg_range_30m", "pump_battery"}
 
 OPS = {
     ">": lambda a, b: a > b, ">=": lambda a, b: a >= b,
@@ -120,6 +129,16 @@ def build_context(snap, config):
             "pump_abnormal_flag": 0 if snap["ctx"].get("PUMP_STATUS") in ("normal", "未知", "") else 1,
             "reservoir": _to_num(snap["ctx"].get("RESERVOIR")),
             "bolus_ago_min": snap["ctx"].get("BOLUS_AGO"),
+            # v8 新增
+            "bolus_units": snap["ctx"].get("BOLUS_UNITS", 0),
+            "carbs_ago_min": snap["ctx"].get("CARBS_AGO", 0),
+            "carbs_g": snap["ctx"].get("CARBS_G", 0),
+            "basal_rate": _to_num(snap["ctx"].get("BASAL_RATE")),
+            "trend_dir": snap["ctx"].get("TREND_DIR", 0),
+            "bg_high_dur": snap["ctx"].get("BG_HIGH_DUR"),
+            "bg_low_dur": snap["ctx"].get("BG_LOW_DUR"),
+            "bg_range_30m": snap["ctx"].get("BG_RANGE_30M"),
+            "pump_battery": snap["ctx"].get("PUMP_BATTERY"),
         },
     }
 
@@ -503,5 +522,15 @@ def build_snapshot_ctx(state, unit, source_name=None):
         # 上次大剂量距现在分钟数：无记录按0（视为刚打过，">N分钟"类条件不触发，宁漏报不误报）
         "BOLUS_AGO": (round((time.time() - view.get("last_bolus_ts", 0) / 1000) / 60)
                       if view.get("last_bolus_ts") else 0),
+        # v8 新增：大剂量单位/碳水/趋势/血糖历史派生/泵电量
+        "BOLUS_UNITS": (round(float(view.get("last_bolus_units") or 0), 2)),
+        "CARBS_AGO": (round((time.time() - view.get("last_carbs_ts", 0) / 1000) / 60)
+                      if view.get("last_carbs_ts") else 0),
+        "CARBS_G": (round(float(view.get("last_carbs_g") or 0), 0)),
+        "TREND_DIR": view.get("trend_dir", 0),
+        "BG_HIGH_DUR": state.get("bg_high_dur"),
+        "BG_LOW_DUR": state.get("bg_low_dur"),
+        "BG_RANGE_30M": state.get("bg_range_30m"),
+        "PUMP_BATTERY": state.get("pump_battery"),
     }
     return ctx
