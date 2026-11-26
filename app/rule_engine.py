@@ -20,6 +20,7 @@ VAR_MAP = {
     "决策来源": "FINAL_SOURCE", "最终预测血糖": "FINAL_VALUE",
     "手表电量": "WATCH_BATTERY", "手表离线": "WATCH_OFFLINE",
     "手表掉电": "WATCH_DROP", "充电状态": "CHARGING",
+    "连续充电时长": "WATCH_CHG_DUR", "连续未充时长": "WATCH_NOCHG_DUR",
     "基础率": "BASAL_RATE", "剩余药量": "RESERVOIR",
     "泵状态": "PUMP_STATUS", "血糖延迟": "BG_DELAY", "泵延迟": "PUMP_OFFLINE",
     "上次大剂量": "BOLUS_AGO", "组名": "GROUP_NAME",
@@ -35,10 +36,20 @@ COND_FIELDS = {
     "COB": "cob", "最终预测BG": "final_value",
     "手表电量": "watch_battery", "手表离线(分钟)": "watch_offline_min",
     "手表掉电(30分钟)": "watch_drop_30m", "充电状态": "watch_charging_flag",
+    "充电状态5分钟前": "watch_chg_5m", "充电状态15分钟前": "watch_chg_15m",
+    "充电状态30分钟前": "watch_chg_30m", "充电状态60分钟前": "watch_chg_60m",
+    "连续充电时长(分钟)": "watch_chg_dur", "连续未充时长(分钟)": "watch_nochg_dur",
+    "掉电幅度·5分钟": "watch_drop_5m", "掉电幅度·15分钟": "watch_drop_15m",
+    "掉电幅度·60分钟": "watch_drop_60m",
     "血糖延迟(分钟)": "bg_delay_min", "泵延迟(分钟)": "pump_offline_min",
     "泵状态异常": "pump_abnormal_flag", "泵药量(单位)": "reservoir",
     "上次大剂量(分钟)": "bolus_ago_min",
 }
+
+# 基于历史的严格字段：数据不足(None)一律判不满足，防止重启/历史短误报
+_STRICT_FIELDS = {"watch_chg_5m", "watch_chg_15m", "watch_chg_30m", "watch_chg_60m",
+                  "watch_chg_dur", "watch_nochg_dur",
+                  "watch_drop_5m", "watch_drop_15m", "watch_drop_60m"}
 
 OPS = {
     ">": lambda a, b: a > b, ">=": lambda a, b: a >= b,
@@ -95,6 +106,15 @@ def build_context(snap, config):
             "watch_offline_min": snap["ctx"].get("WATCH_OFFLINE"),
             "watch_drop_30m": snap["ctx"].get("WATCH_DROP"),
             "watch_charging_flag": snap["ctx"].get("CHARGING_FLAG"),
+            "watch_chg_5m": snap["ctx"].get("WATCH_CHG_5M"),
+            "watch_chg_15m": snap["ctx"].get("WATCH_CHG_15M"),
+            "watch_chg_30m": snap["ctx"].get("WATCH_CHG_30M"),
+            "watch_chg_60m": snap["ctx"].get("WATCH_CHG_60M"),
+            "watch_chg_dur": snap["ctx"].get("WATCH_CHG_DUR"),
+            "watch_nochg_dur": snap["ctx"].get("WATCH_NOCHG_DUR"),
+            "watch_drop_5m": snap["ctx"].get("WATCH_DROP_5M"),
+            "watch_drop_15m": snap["ctx"].get("WATCH_DROP_15M"),
+            "watch_drop_60m": snap["ctx"].get("WATCH_DROP_60M"),
             "bg_delay_min": snap["ctx"].get("BG_DELAY"),
             "pump_offline_min": snap["ctx"].get("PUMP_OFFLINE"),
             "pump_abnormal_flag": 0 if snap["ctx"].get("PUMP_STATUS") in ("normal", "未知", "") else 1,
@@ -225,6 +245,8 @@ def _eval_cond(cond, fields, now=None):
     except (TypeError, ValueError):
         return False, "条件阈值非法: %r" % cond.get("value")
     current_raw = fields.get(COND_FIELDS.get(cond_type, ""), 0.0)
+    if COND_FIELDS.get(cond_type, "") in _STRICT_FIELDS and current_raw is None:
+        return False, "%s数据不足(需积累历史)" % cond_type
     try:
         current = float(current_raw)
     except (TypeError, ValueError):
@@ -458,6 +480,16 @@ def build_snapshot_ctx(state, unit, source_name=None):
         "CHARGING_FLAG": (1 if state.get("watch_charging") else 0),
         "CHARGING": ("充电中" if state.get("watch_charging")
                      else "未知" if state.get("watch_charging") is None else "未充电"),
+        # 充电历史派生（None=历史不足，条件引擎判不满足防误报）
+        "WATCH_CHG_5M": state.get("watch_chg_5m"),
+        "WATCH_CHG_15M": state.get("watch_chg_15m"),
+        "WATCH_CHG_30M": state.get("watch_chg_30m"),
+        "WATCH_CHG_60M": state.get("watch_chg_60m"),
+        "WATCH_CHG_DUR": state.get("watch_chg_dur"),
+        "WATCH_NOCHG_DUR": state.get("watch_nochg_dur"),
+        "WATCH_DROP_5M": state.get("watch_drop_5m"),
+        "WATCH_DROP_15M": state.get("watch_drop_15m"),
+        "WATCH_DROP_60M": state.get("watch_drop_60m"),
         # 泵数据（无数据时显示"未知"，延迟按9999避免误判为"未断线"）
         "BASAL_RATE": ("%.2f" % state["basal_rate"]
                        if state.get("basal_rate") is not None else "未知"),

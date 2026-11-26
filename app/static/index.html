@@ -254,8 +254,8 @@ summary{cursor:pointer;color:var(--blue);font-size:14px;font-weight:500;min-heig
 <div id="toast"></div>
 
 <script>
-const typeList=[["时间","⏰ 时间"],["血糖绝对值","血糖绝对值"],["delta(5min)","delta(5min)"],["shortAvgDelta(15min)","短平均增量(15min)"],["longAvgDelta(30min)","长平均增量(30min)"],["总IOB","总IOB"],["大剂量IOB","大剂量IOB"],["基础率IOB","基础率IOB"],["COB","剩余COB"],["最终预测BG","最终预测BG"],["手表电量","手表电量(%)"],["手表离线(分钟)","手表离线(分钟)"],["手表掉电(30分钟)","手表掉电(30分钟)%"],["充电状态","充电状态"],["血糖延迟(分钟)","血糖延迟(分钟)"],["泵延迟(分钟)","泵延迟(分钟)"],["泵状态异常","泵状态异常"],["泵药量(单位)","泵药量(单位)"],["上次大剂量(分钟)","上次大剂量(分钟)"]];
-const COND_HELP={"时间":"不设时间=恒真(仅周几过滤)；定时=到点后当日触发一次；时间段支持 22:00-7:00 跨夜。周几不勾=每天都有效","血糖绝对值":"当前血糖值(mmol/L或mg/dL)，如\"小于 4\"触发低血糖提醒","delta(5min)":"近5分钟血糖变化速率，负数=在下降，如\"小于 -1\"代表快速下降","shortAvgDelta(15min)":"近15分钟平均变化速率，过滤瞬时波动","longAvgDelta(30min)":"近30分钟平均变化速率，反映整体趋势","总IOB":"体内胰岛素活性总量(单位U)","大剂量IOB":"餐前大剂量剩余活性(单位U)","基础率IOB":"基础量剩余活性(单位U)","COB":"体内未消耗完的碳水(克g)","最终预测BG":"AAPS 对未来的预测血糖值","手表电量":"手表当前电量百分比，如\"小于 20\"提醒充电","手表离线(分钟)":"手表多久没上报数据，如\"大于 60\"可能已关机","手表掉电(30分钟)":"30分钟内电量下降幅度%，如\"大于 2\"提示充电断开","充电状态":"等于\"充电中\"或\"未充电\"，与掉电条件组合判断充电故障","血糖延迟(分钟)":"数据多久没更新，如\"大于 20\"说明手机/手表断连(NS断线)","泵延迟(分钟)":"泵数据多久没更新，如\"大于 30\"说明泵失联","泵状态异常":"泵上报状态不是正常时触发(选\"异常\")","泵药量(单位)":"药液剩余量U，如\"小于 20\"提醒换药","上次大剂量(分钟)":"距上次大剂量的分钟数，如\"大于等于 120\"=超过2小时没打大剂量；无记录按0(刚打过)处理"};
+const typeList=[["时间","⏰ 时间"],["血糖绝对值","血糖绝对值"],["delta(5min)","delta(5min)"],["shortAvgDelta(15min)","短平均增量(15min)"],["longAvgDelta(30min)","长平均增量(30min)"],["总IOB","总IOB"],["大剂量IOB","大剂量IOB"],["基础率IOB","基础率IOB"],["COB","剩余COB"],["最终预测BG","最终预测BG"],["手表电量","手表电量(%)"],["手表离线(分钟)","手表离线(分钟)"],["手表掉电(30分钟)","掉电幅度·30分钟"],["掉电幅度·5分钟","掉电幅度·5分钟"],["掉电幅度·15分钟","掉电幅度·15分钟"],["掉电幅度·60分钟","掉电幅度·60分钟"],["充电状态","充电状态"],["充电状态5分钟前","充电状态·5分钟前"],["充电状态15分钟前","充电状态·15分钟前"],["充电状态30分钟前","充电状态·30分钟前"],["充电状态60分钟前","充电状态·60分钟前"],["连续充电时长(分钟)","连续充电时长(分钟)"],["连续未充时长(分钟)","连续未充时长(分钟)"],["血糖延迟(分钟)","血糖延迟(分钟)"],["泵延迟(分钟)","泵延迟(分钟)"],["泵状态异常","泵状态异常"],["泵药量(单位)","泵药量(单位)"],["上次大剂量(分钟)","上次大剂量(分钟)"]];
+const COND_HELP={"时间":"不设时间=恒真(仅周几过滤)；定时=到点后当日触发一次；时间段支持 22:00-7:00 跨夜。周几不勾=每天都有效","血糖绝对值":"当前血糖值(mmol/L或mg/dL)，如\"小于 4\"触发低血糖提醒","delta(5min)":"近5分钟血糖变化速率，负数=在下降，如\"小于 -1\"代表快速下降","shortAvgDelta(15min)":"近15分钟平均变化速率，过滤瞬时波动","longAvgDelta(30min)":"近30分钟平均变化速率，反映整体趋势","总IOB":"体内胰岛素活性总量(单位U)","大剂量IOB":"餐前大剂量剩余活性(单位U)","基础率IOB":"基础量剩余活性(单位U)","COB":"体内未消耗完的碳水(克g)","最终预测BG":"AAPS 对未来的预测血糖值","手表电量":"手表当前电量百分比，如\"小于 20\"提醒充电","手表离线(分钟)":"手表多久没上报数据，如\"大于 60\"可能已关机","手表掉电(30分钟)":"最近30分钟内电量下降的百分点数（原\"手表掉电30分钟\"），如\"大于 2\"表示掉了超过2%","掉电幅度·5分钟":"最近5分钟内电量下降百分点数，反应快适合快速确认掉电","掉电幅度·15分钟":"最近15分钟内电量下降百分点数","掉电幅度·60分钟":"最近60分钟内电量下降百分点数，平滑适合慢掉电","充电状态":"当前时刻在充电/未充电（瞬时值）","充电状态5分钟前":"约5分钟前那一刻是否在充电；与\"充电状态\"组合可判断刚发生的变化","充电状态15分钟前":"约15分钟前那一刻是否在充电","充电状态30分钟前":"约30分钟前那一刻是否在充电。充电断开=\"30分钟前充电中 且 当前未充电 且 掉电>2\"，从未充电的手表不会误报","充电状态60分钟前":"约60分钟前那一刻是否在充电","连续充电时长(分钟)":"截至当前连续处于充电中的分钟数（当前未充电=0）。≥30 表示过去半小时一直稳定在充","连续未充时长(分钟)":"截至当前连续未充电的分钟数（当前在充=0）。≥5 可过滤拔掉又插回的抖动。⚠️ 以上历史类条件在服务重启后需积累约N+30分钟数据才生效，不足一律视为不满足（不误报）","血糖延迟(分钟)":"数据多久没更新，如\"大于 20\"说明手机/手表断连(NS断线)","泵延迟(分钟)":"泵数据多久没更新，如\"大于 30\"说明泵失联","泵状态异常":"泵上报状态不是正常时触发(选\"异常\")","泵药量(单位)":"药液剩余量U，如\"小于 20\"提醒换药","上次大剂量(分钟)":"距上次大剂量的分钟数，如\"大于等于 120\"=超过2小时没打大剂量；无记录按0(刚打过)处理"};
 const opList=[["大于",">"],["大于等于",">="],["等于","=="],["小于","<"],["小于等于","<="]];
 const opTxt={">":"大于",">=":"≥","==":"等于","<":"小于","<=":"≤"};
 const logicList=[["与","且"],["或","或"],["非","非"]];
@@ -526,7 +526,7 @@ function condText(c){
     const wds=(c.weekdays||[]).map((v,i)=>v?weekTxt[i]:null).filter(Boolean);
     return `⏰ ${tag}${wds.length&&wds.length<7?' · 周'+wds.join(''):''}`;
   }
-  const val=c.type==='充电状态'?(c.value==1?'充电中':'未充电'):(c.value??'');
+  const val=(c.type==='充电状态'||/^充电状态\d+分钟前$/.test(c.type))?(c.value==1?'充电中':'未充电'):(c.value??'');
   return `${label} ${opTxt[c.op]||c.op} ${val}`;
 }
 function condSummary(t){
@@ -788,11 +788,11 @@ function buildCond(c,ti,gi,ci){
       <button class="btn btn-danger btn-sm" onclick="delCond(${ti},${gi},${ci})">✕</button></div>`;
   }
   const types=typeList.map(([v,n])=>`<option value="${v}" ${c.type===v?'selected':''}>${n}</option>`).join('');
-  const isEnum=(c.type==='充电状态'||c.type==='泵状态异常');
+  const isEnum=(c.type==='充电状态'||c.type==='泵状态异常'||/^充电状态\d+分钟前$/.test(c.type));
   const ops=(isEnum?opList.filter(x=>x[1]==='=='):opList).map(([lbl,v])=>`<option value="${v}" ${c.op===v?'selected':''}>${lbl}</option>`).join('');
   const logicCtl=`<select onchange="cSet(${ti},${gi},${ci},'logic',this.value)">${logicList.filter(x=>x[1]!=='或').map(([v,n])=>`<option value="${v}" ${(c.logic||'与')===v?'selected':''}>${n}</option>`).join('')}</select>`;
   let valCtl;
-  if(c.type==='充电状态'){
+  if(c.type==='充电状态'||/^充电状态\d+分钟前$/.test(c.type)){
     valCtl=`<select onchange="cSet(${ti},${gi},${ci},'value',Number(this.value))"><option value="1" ${c.value==1?'selected':''}>充电中</option><option value="0" ${c.value==0?'selected':''}>未充电</option></select>`;
   }else if(c.type==='泵状态异常'){
     valCtl=`<select onchange="cSet(${ti},${gi},${ci},'value',Number(this.value))"><option value="1" ${c.value==1?'selected':''}>异常</option><option value="0" ${c.value==0?'selected':''}>正常</option></select>`;
@@ -899,11 +899,11 @@ function addNewTask(){  configData.automation_tasks.push({name:'新任务',categ
   expandedTaskKey=null;renderTasks();switchTab('tasks',document.querySelectorAll('.tabbtn')[1]);
 }
 function createWatchTasks(){
-  if(!confirm('将创建3个任务：\n1. 低电量预警：电量<20%，全天生效，间隔1小时\n2. 充电断开预警：充电状态==未充电 且 30分钟掉电>2%，22:00-7:00，间隔1小时\n3. 充电接触不良预警：充电状态==充电中 且 30分钟掉电>2%，22:00-7:00，间隔1小时\n\n创建后点"⚙设置"可调整，继续？'))return;
+  if(!confirm('将创建3个任务：\n1. 低电量预警：电量<20%，全天生效，间隔1小时\n2. 充电断开预警：30分钟前在充电 且 现在未充电 且 掉电>2%，22:00-7:00，间隔1小时（从未充电不误报）\n3. 充电接触不良预警：连续充电≥30分钟 且 掉电>2%，22:00-7:00，间隔1小时\n\n注：历史类条件服务重启后约30分钟内不触发（防误报）。创建后点"⚙设置"可调整，继续？'))return;
   const wd=[false,false,false,false,false,false,false];
   configData.automation_tasks.push({name:'低电量预警',enabled:true,execution_type:'repeat',repeat_interval:3600,time_type:'none',time_value:'',weekdays:wd.slice(),to_users:[],push_options:{bark_sound:'alarm',bark_badge:1,bark_category:'warning'},conditions:[{type:'手表电量',op:'<',value:20,logic:'与'}],msg:'🔋 低电量预警\n手表电量: {手表电量}%\n充电状态: {充电状态}\n请及时给孩子手表充电\n当前血糖: {当前血糖} {趋势}\n时间: {时间}'});
-  configData.automation_tasks.push({name:'充电断开预警',enabled:true,execution_type:'repeat',repeat_interval:3600,weekdays:wd.slice(),to_users:[],push_options:{bark_sound:'alarm',bark_badge:1,bark_category:'warning'},conditions:[{type:'时间',op:'==',value:0,tg_type:'range',tg_value:'22:00-7:00',weekdays:[],logic:'与'},{type:'充电状态',op:'==',value:0,logic:'与'},{type:'手表掉电(30分钟)',op:'>',value:2,logic:'与'}],msg:'⚠️ 充电断开预警\n充电状态: {充电状态}\n30分钟掉了{手表掉电}%\n手表可能被震离充电器，请检查\n时间: {时间}'});
-  configData.automation_tasks.push({name:'充电接触不良预警',enabled:true,execution_type:'repeat',repeat_interval:3600,weekdays:wd.slice(),to_users:[],push_options:{bark_sound:'alarm',bark_badge:1,bark_category:'warning'},conditions:[{type:'时间',op:'==',value:0,tg_type:'range',tg_value:'22:00-7:00',weekdays:[],logic:'与'},{type:'充电状态',op:'==',value:1,logic:'与'},{type:'手表掉电(30分钟)',op:'>',value:2,logic:'与'}],msg:'⚠️ 充电接触不良预警\n充电状态: {充电状态}\n30分钟掉了{手表掉电}%\n显示充电中但电量在下降，请重新放置手表\n时间: {时间}'});
+  configData.automation_tasks.push({name:'充电断开预警',enabled:true,execution_type:'repeat',repeat_interval:3600,weekdays:wd.slice(),to_users:[],push_options:{bark_sound:'alarm',bark_badge:1,bark_category:'warning'},conditions:[{type:'时间',op:'==',value:0,tg_type:'range',tg_value:'22:00-7:00',weekdays:[],logic:'与'},{type:'充电状态30分钟前',op:'==',value:1,logic:'与'},{type:'充电状态',op:'==',value:0,logic:'与'},{type:'手表掉电(30分钟)',op:'>',value:2,logic:'与'}],msg:'⚠️ 充电断开预警\n充电状态: {充电状态}\n30分钟掉了{手表掉电}%\n之前正常充电现已断开，可能被震离充电器，请检查\n时间: {时间}'});
+  configData.automation_tasks.push({name:'充电接触不良预警',enabled:true,execution_type:'repeat',repeat_interval:3600,weekdays:wd.slice(),to_users:[],push_options:{bark_sound:'alarm',bark_badge:1,bark_category:'warning'},conditions:[{type:'时间',op:'==',value:0,tg_type:'range',tg_value:'22:00-7:00',weekdays:[],logic:'与'},{type:'连续充电时长(分钟)',op:'>=',value:30,logic:'与'},{type:'手表掉电(30分钟)',op:'>',value:2,logic:'与'}],msg:'⚠️ 充电接触不良预警\n已连续充电{连续充电时长}分钟\n30分钟掉了{手表掉电}%\n显示充电中但电量在下降，请重新放置手表\n时间: {时间}'});
   renderTasks();toast('✅ 已添加3个任务，点"保存全部设置"生效');
 }
 function createOfflineTasks(){
@@ -1035,7 +1035,7 @@ function cSet(ti,gi,ci,k,v){
   const c=ensureGroups(ti)[gi].conds[ci];
   if(k==='value'){c.value=(v===''?'':Number(v));}
   else{c[k]=v;}
-  if(k==='type'&&(v==='充电状态'||v==='泵状态异常')){
+  if(k==='type'&&(v==='充电状态'||v==='泵状态异常'||/^充电状态\d+分钟前$/.test(v))){
     if(c.op!=='==')c.op='==';
     if(c.value!==0&&c.value!==1)c.value=1;
   }

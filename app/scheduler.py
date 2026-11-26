@@ -12,6 +12,44 @@ from .ns_client import NightscoutClient, parse_devicestatus, trend_text
 from . import rule_engine
 
 
+def _hist_point(hist, n_min):
+    """距「最新点−N分钟」最近的历史点；历史未覆盖（最老点晚于目标+10分钟）→ None。"""
+    if not hist:
+        return None
+    target = hist[-1][0] - n_min * 60000
+    if hist[0][0] > target + 10 * 60000:
+        return None
+    return min(hist, key=lambda p: abs(p[0] - target))
+
+
+def _drop_at(hist, n_min):
+    """N分钟内电量下降百分点（正=掉了）；历史不足→None。"""
+    p = _hist_point(hist, n_min)
+    return round(p[1] - hist[-1][1], 1) if p else None
+
+
+def _chg_at(hist, n_min):
+    """N分钟前充电状态：1=充电中/0=未充电/None=历史不足或未知。"""
+    p = _hist_point(hist, n_min)
+    if p is None or p[2] is None:
+        return None
+    return 1 if p[2] else 0
+
+
+def _dur_at(hist, want):
+    """截至最新点连续 is_charging==want 的分钟数；最新点不满足→0；无历史→None。"""
+    if not hist:
+        return None
+    if hist[-1][2] != want:
+        return 0
+    start = hist[-1][0]
+    for p in reversed(hist):
+        if p[2] != want:
+            break
+        start = p[0]
+    return round((hist[-1][0] - start) / 60000, 1)
+
+
 class Scheduler:
     def __init__(self, config_store, db):
         self.config_store = config_store
@@ -26,7 +64,8 @@ class Scheduler:
         self.deltas = DeltaCalculator()
         self._lock = threading.RLock()
         self._thread = None
-        # 手表电量历史：(时间戳ms, 电量%)，约6小时窗口，用于30分钟掉电检测
+        # 手表历史：(时间戳ms, 电量%, 充电状态True/False/None)，约6小时窗口，
+        # 用于掉电幅度(5/15/30/60分钟)与充电状态历史条件
         self._watch_hist = deque(maxlen=360)
         # 每个数据源独立状态（增量/IOB/预测），供任务按源绑定
         self._sources_state = {}
@@ -212,13 +251,18 @@ class Scheduler:
                 self._state["watch_ts"] = newest_watch["ts"]
             wts = newest_watch["ts"]
             wb = newest_watch["uploader_battery"]
+            wc = newest_watch["is_charging"]
             if not self._watch_hist or self._watch_hist[-1][0] != wts:
-                self._watch_hist.append((wts, wb))
-            cutoff30 = wts - 30 * 60 * 1000
-            older = [(t, b) for (t, b) in self._watch_hist if t <= cutoff30]
-            drop = (older[-1][1] - wb) if older else None
+                self._watch_hist.append((wts, wb, wc))
+            hist = list(self._watch_hist)
             with self._lock:
-                self._state["watch_drop_30m"] = drop
+                self._state["watch_drop_30m"] = _drop_at(hist, 30)
+                for n in (5, 15, 60):  # 掉电幅度可选窗口（30m 沿用旧键向后兼容）
+                    self._state["watch_drop_%dm" % n] = _drop_at(hist, n)
+                for n in (5, 15, 30, 60):  # N分钟前充电状态 1/0/None
+                    self._state["watch_chg_%dm" % n] = _chg_at(hist, n)
+                self._state["watch_chg_dur"] = _dur_at(hist, True)
+                self._state["watch_nochg_dur"] = _dur_at(hist, False)
         if newest_pump:
             with self._lock:
                 self._state["basal_rate"] = newest_pump["basal_rate"]
