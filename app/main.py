@@ -71,6 +71,20 @@ def create_app(scheduler, config_store, db, admin_password, secure_cookies=False
         resp.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
         return resp
 
+    @app.route("/static/<path:fn>")
+    def static_file(fn):
+        """静态资源（mermaid.min.js 等大文件缓存一天；send_from_directory 自带目录穿越防护）。"""
+        resp = send_from_directory(STATIC_DIR, fn)
+        resp.headers["Cache-Control"] = "public, max-age=86400"
+        return resp
+
+    @app.route("/guide")
+    def guide():
+        """条件图鉴：37 个条件的数据源/算法/图解说明，无敏感信息，未登录也可查看。"""
+        resp = send_from_directory(STATIC_DIR, "conditions-guide.html")
+        resp.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+        return resp
+
     @app.route("/api/health")
     def health():
         snap = scheduler.snapshot()
@@ -106,7 +120,7 @@ def create_app(scheduler, config_store, db, admin_password, secure_cookies=False
 
     @app.before_request
     def auth_gate():
-        public = ("/api/health", "/api/login", "/static/")
+        public = ("/api/health", "/api/login", "/static/", "/guide")
         if request.path == "/" or request.path.startswith(public):
             return None
         if not authorized():

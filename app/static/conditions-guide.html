@@ -1,0 +1,738 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AAPS-Push 条件图鉴</title>
+<style>
+:root{
+  --bg:#f5f7fa; --bg2:#ffffff; --ink:#1a2735; --muted:#5b6b7c;
+  --rule:#dde5ee; --accent:#2f7ce0; --accent2:#5b5bd6;
+  --mono:ui-monospace,"SF Mono","Cascadia Code",Menlo,Consolas,monospace;
+  --sans:"PingFang SC","Microsoft YaHei","Hiragino Sans GB",system-ui,sans-serif;
+  --src:#0e7490; --calc:#7c3aed; --out:#2563eb; --cmp:#b45309;
+}
+*{box-sizing:border-box;}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);
+  font-size:16px;line-height:1.75;-webkit-font-smoothing:antialiased;}
+.wrap{max-width:1080px;margin:0 auto;padding:0 22px 80px;}
+header.masthead{padding:54px 0 30px;border-bottom:3px solid var(--ink);margin-bottom:8px;}
+.kicker{font-family:var(--mono);font-size:12px;letter-spacing:.18em;text-transform:uppercase;
+  color:var(--accent);font-weight:700;}
+h1{font-size:38px;line-height:1.2;margin:12px 0 6px;font-weight:800;letter-spacing:-.01em;}
+.sub{color:var(--muted);font-size:17px;margin:0;}
+.meta-row{display:flex;flex-wrap:wrap;gap:18px;margin-top:22px;font-family:var(--mono);font-size:13px;color:var(--muted);}
+.meta-row b{color:var(--ink);font-weight:600;}
+h2{font-size:25px;font-weight:800;margin:46px 0 6px;padding-bottom:8px;border-bottom:2px solid var(--rule);}
+h2 .num{color:var(--accent);font-family:var(--mono);font-size:18px;margin-right:10px;}
+h3{font-size:18px;font-weight:700;margin:30px 0 4px;color:var(--ink);}
+p.lead{color:var(--muted);margin:6px 0 18px;}
+mark.key{background:none;color:var(--accent);font-weight:700;}
+code{font-family:var(--mono);background:#eef2f7;color:var(--calc);padding:1px 6px;border-radius:5px;font-size:.86em;}
+pre{background:#0f1722;color:#e6edf5;padding:16px 18px;border-radius:10px;overflow-x:auto;
+  font-family:var(--mono);font-size:13.5px;line-height:1.6;border:1px solid #1e2a3a;}
+pre .c{color:#7d8fa3;} pre .k{color:#79c0ff;} pre .s{color:#a5d6ff;} pre .f{color:#d2a8ff;}
+/* index */
+.index{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px;margin:22px 0 8px;}
+.index a{display:block;background:var(--bg2);border:1px solid var(--rule);border-radius:9px;
+  padding:11px 14px;text-decoration:none;color:var(--ink);font-size:14px;transition:.15s;}
+.index a:hover{border-color:var(--accent);box-shadow:0 3px 12px rgba(47,124,224,.12);transform:translateY(-1px);}
+.index a .t{font-weight:700;} .index a .n{font-family:var(--mono);font-size:12px;color:var(--muted);}
+/* condition card */
+.cond{background:var(--bg2);border:1px solid var(--rule);border-radius:14px;
+  padding:18px 20px;margin:16px 0;border-left:5px solid var(--accent);}
+.cond.new{border-left-color:#16a34a;background:#f3fbf5;}
+.cond-hd{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:4px;}
+.cond-hd .name{font-size:18px;font-weight:800;}
+.tag{font-family:var(--mono);font-size:11px;font-weight:700;padding:2px 9px;border-radius:999px;letter-spacing:.03em;}
+.tag.field{background:#eef2f7;color:var(--out);}
+.tag.strict{background:#fdecec;color:#c0262e;}
+.tag.new{background:#dcfce7;color:#15803d;}
+.tag.time{background:#fef3df;color:#b45309;}
+.src-line{font-size:13.5px;color:var(--muted);margin:2px 0 12px;}
+.src-line b{color:var(--ink);}
+.loc{font-family:var(--mono);font-size:12px;color:var(--accent2);background:#f4f2fe;
+  padding:2px 8px;border-radius:6px;display:inline-block;margin:2px 6px 2px 0;}
+/* flow strip */
+.flow{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:12px 0;
+  background:#fbfcfe;border:1px dashed var(--rule);border-radius:10px;padding:12px 14px;}
+.node{font-family:var(--mono);font-size:12px;padding:6px 11px;border-radius:8px;white-space:nowrap;font-weight:600;}
+.node.src{background:#e0f2f7;color:var(--src);border:1px solid #b6e0ec;}
+.node.calc{background:#ece7fb;color:var(--calc);border:1px solid #d6cbf3;}
+.node.out{background:#e3edfb;color:var(--out);border:1px solid #c4dbf6;}
+.node.cmp{background:#fbeacd;color:var(--cmp);border:1px solid #f3d6a3;}
+.arr{color:var(--muted);font-weight:700;}
+.legend{display:flex;flex-wrap:wrap;gap:14px;font-size:12px;color:var(--muted);margin:10px 0 2px;font-family:var(--mono);}
+.legend span{display:inline-flex;align-items:center;gap:5px;}
+.dot{width:11px;height:11px;border-radius:3px;display:inline-block;}
+/* tables */
+.table-wrap{overflow-x:auto;overflow-y:auto;max-height:600px;margin:14px 0;border:1px solid var(--rule);border-radius:10px;}
+table{border-collapse:collapse;width:100%;font-size:13.5px;}
+th{background:#f0f4f9;color:var(--muted);font-weight:600;text-align:left;position:sticky;top:0;}
+th,td{padding:9px 12px;border-bottom:1px solid var(--rule);}
+tr:last-child td{border-bottom:none;}
+td code{font-size:12px;}
+td .ok{color:#16a34a;font-weight:700;} td .no{color:#c0262e;font-weight:700;}
+/* callout */
+.callout{background:#f4f8fe;border-left:4px solid var(--accent);border-radius:0 10px 10px 0;
+  padding:14px 18px;margin:18px 0;font-size:14.5px;}
+.callout.warn{background:#fef8ec;border-left-color:var(--cmp);}
+.callout.good{background:#f1fbf3;border-left-color:#16a34a;}
+.callout h4{margin:0 0 6px;font-size:15px;}
+/* suggestion card */
+.sug{background:var(--bg2);border:1px solid var(--rule);border-radius:12px;padding:16px 18px;margin:14px 0;}
+.sug .hd{font-weight:800;font-size:16px;display:flex;align-items:center;gap:10px;}
+.cost{font-family:var(--mono);font-size:11px;font-weight:700;padding:2px 9px;border-radius:999px;}
+.cost.low{background:#dcfce7;color:#15803d;} .cost.mid{background:#fef3df;color:#b45309;}
+.sug p{margin:8px 0 0;font-size:14.5px;color:var(--muted);}
+figure.diagram{background:var(--bg2);border:1px solid var(--rule);border-radius:14px;
+  padding:22px 18px 14px;margin:20px 0;text-align:center;}
+figure.diagram figcaption{font-size:12.5px;color:var(--muted);margin-top:10px;font-family:var(--mono);}
+.mermaid{display:flex;justify-content:center;}
+footer{margin-top:60px;padding-top:24px;border-top:2px solid var(--ink);font-size:13px;color:var(--muted);}
+footer .sources ol{padding-left:1.2rem;font-size:.85rem;}
+footer .sources li{margin-bottom:.4rem;overflow-wrap:break-word;word-break:break-all;}
+footer .sources .src-url{display:block;font-size:.82rem;color:var(--accent);word-break:break-all;}
+footer .sources a{word-break:break-all;}
+sup a{color:var(--accent);text-decoration:none;font-size:.75em;font-weight:700;}
+sup a:hover{text-decoration:underline;}
+@media(max-width:680px){h1{font-size:28px;}.wrap{padding:0 14px 60px;}}
+@media print{body{background:#fff;}pre{white-space:pre-wrap;}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="masthead">
+  <div class="kicker">Conditions Guide · Rule Engine</div>
+  <h1>AAPS-Push 条件图鉴</h1>
+  <p class="sub">全部 37 个触发条件 —— 数据从哪来、怎么算、怎么用，附伪代码与流程图</p>
+  <div class="meta-row">
+    <span>版本 <b>v1.0-beta02</b></span>
+    <span>条件总数 <b>37（7 大类）</b></span>
+    <span>引擎 <b>rule_engine.py</b></span>
+    <span>更新 <b>2026-11-26</b></span>
+  </div>
+  <p style="margin-top:14px"><a href="/" style="color:var(--accent);font-weight:700;text-decoration:none">← 返回管理台</a></p>
+</header>
+
+<h2><span class="num">00</span>数据管线总览</h2>
+<p class="lead">所有条件都走同一条链路。理解这张图，下面 37 个条件就只是"取哪个字段、怎么算"的差异。</p>
+
+<figure class="diagram">
+  <pre class="mermaid">
+flowchart LR
+  A["Nightscout API"] -->|entries sgv| B["scheduler 采集"]
+  A -->|devicestatus| B
+  A -->|treatments| B
+  B -->|DeltaCalculator 增量| C["state 字典"]
+  B -->|watch_hist 缓冲| C
+  B -->|final_decision| C
+  C --> D["build_snapshot_ctx ctx 显示单位"]
+  D --> E["build_context fields 判断取值"]
+  E --> F{"_eval_cond op threshold"}
+  F --> G["组内 AND"]
+  G --> H["组间链条 fold 或且非"]
+  H --> I["触发 选组 推送"]
+  classDef api fill:#e0f2f7,stroke:#0e7490,color:#0e7490
+  classDef calc fill:#ece7fb,stroke:#7c3aed,color:#5b21b6
+  classDef out fill:#e3edfb,stroke:#2563eb,color:#1d4ed8
+  class A api
+  class B,C,D,E calc
+  class F,G,H,I out
+  </pre>
+  <figcaption>图 0 · 条件求值全链路（源 → 计算 → ctx → fields → 单条件 → 组 → 链条 → 推送）</figcaption>
+</figure>
+
+<div class="legend">
+  <span><i class="dot" style="background:#e0f2f7;border:1px solid #b6e0ec"></i>数据源</span>
+  <span><i class="dot" style="background:#ece7fb;border:1px solid #d6cbf3"></i>计算/转换</span>
+  <span><i class="dot" style="background:#e3edfb;border:1px solid #c4dbf6"></i>字段值</span>
+  <span><i class="dot" style="background:#fbeacd;border:1px solid #f3d6a3"></i>比较判断</span>
+</div>
+
+<p>统一求值入口是 <code>_eval_cond</code>（<span class="loc">rule_engine.py:228-259</span>）：把条件类型经 <code>COND_FIELDS</code> 映射成字段名，从 <code>fields</code> 取值，用 <code>OPS</code> 表比较阈值；<code>logic=="非"</code> 时对该项取反。组内全部条件 <mark class="key">AND</mark>，组间按 <mark class="key">或/且/非</mark> 顺序链条折叠（<span class="loc">rule_engine.py:262-293</span>）。</p>
+
+<div class="callout">
+  <h4>三类"无数据"兜底约定（防误报核心）</h4>
+  <b>①</b> 延迟类（血糖/泵/手表离线）无数据 → <code>9999</code>，让"大于N"必然成立、"小于N"不成立。<br>
+  <b>②</b> 大剂量距今天数无记录 → <code>0</code>（视为刚打过），"大于N分钟"不触发。<br>
+  <b>③</b> 充电/掉电历史类（<code>_STRICT_FIELDS</code>）历史不足 → <code>None</code>，<code>_eval_cond</code> 直接判"数据不足"不满足（<span class="loc">rule_engine.py:248-249</span>），重启后需积累约 N+30 分钟才生效。
+</div>
+
+<h2 id="index"><span class="num">01</span>条件索引（37 项 · 7 类）</h2>
+<div class="index">
+  <a href="#c-bg"><span class="t">血糖绝对值</span><br><span class="n">bg · 快照</span></a>
+  <a href="#c-delta"><span class="t">delta(5min)</span><br><span class="n">delta · 增量</span></a>
+  <a href="#c-short"><span class="t">短平均增量(15min)</span><br><span class="n">short_delta</span></a>
+  <a href="#c-long"><span class="t">长平均增量(30min)</span><br><span class="n">long_delta</span></a>
+  <a href="#c-trend"><span class="t">血糖趋势</span><br><span class="n">trend_dir · 5档</span></a>
+  <a href="#c-range"><span class="t">波动幅度·30分钟</span><br><span class="n">bg_range_30m</span></a>
+  <a href="#c-hidur"><span class="t">连续高血糖时长</span><br><span class="n">bg_high_dur &gt;10.0</span></a>
+  <a href="#c-lodur"><span class="t">连续低血糖时长</span><br><span class="n">bg_low_dur &lt;3.9</span></a>
+  <a href="#c-bago"><span class="t">上次大剂量(分钟)</span><br><span class="n">bolus_ago_min</span></a>
+  <a href="#c-bu"><span class="t">上次大剂量(单位)</span><br><span class="n">bolus_units</span></a>
+  <a href="#c-cago"><span class="t">距上次碳水(分钟)</span><br><span class="n">carbs_ago_min</span></a>
+  <a href="#c-cg"><span class="t">上次碳水(克)</span><br><span class="n">carbs_g</span></a>
+  <a href="#c-final"><span class="t">最终预测BG</span><br><span class="n">final_value</span></a>
+  <a href="#c-iob"><span class="t">总IOB</span><br><span class="n">iob</span></a>
+  <a href="#c-biob"><span class="t">大剂量IOB</span><br><span class="n">bolus_iob</span></a>
+  <a href="#c-basiob"><span class="t">基础率IOB</span><br><span class="n">basal_iob</span></a>
+  <a href="#c-cob"><span class="t">剩余COB</span><br><span class="n">cob</span></a>
+  <a href="#c-bgd"><span class="t">血糖延迟(分钟)</span><br><span class="n">bg_delay_min</span></a>
+  <a href="#c-wbat"><span class="t">手表电量(%)</span><br><span class="n">watch_battery</span></a>
+  <a href="#c-woff"><span class="t">手表离线(分钟)</span><br><span class="n">watch_offline_min</span></a>
+  <a href="#c-wdrop30"><span class="t">掉电幅度·30分钟</span><br><span class="n">watch_drop_30m</span></a>
+  <a href="#c-wdropN"><span class="t">掉电幅度·5/15/60分钟</span><br><span class="n">watch_drop_nM</span></a>
+  <a href="#c-chg"><span class="t">充电状态</span><br><span class="n">watch_charging_flag</span></a>
+  <a href="#c-chgN"><span class="t">充电状态·N分钟前</span><br><span class="n">watch_chg_5/15/30/60m</span></a>
+  <a href="#c-chgdur"><span class="t">连续充电时长</span><br><span class="n">watch_chg_dur</span></a>
+  <a href="#c-nochg"><span class="t">连续未充时长</span><br><span class="n">watch_nochg_dur</span></a>
+  <a href="#c-res"><span class="t">泵药量(单位)</span><br><span class="n">reservoir</span></a>
+  <a href="#c-pbat"><span class="t">泵电池电量(%)</span><br><span class="n">pump_battery</span></a>
+  <a href="#c-basal"><span class="t">当前基础率(U/h)</span><br><span class="n">basal_rate</span></a>
+  <a href="#c-pabn"><span class="t">泵状态异常</span><br><span class="n">pump_abnormal_flag</span></a>
+  <a href="#c-poff"><span class="t">泵延迟(分钟)</span><br><span class="n">pump_offline_min</span></a>
+  <a href="#c-time"><span class="t">时间</span><br><span class="n">窗口三态</span></a>
+</div>
+
+<h2><span class="num">02</span>血糖与增量类（10）</h2>
+
+<div class="cond" id="c-bg">
+  <div class="cond-hd"><span class="name">血糖绝对值</span><span class="tag field">→ bg</span></div>
+  <div class="src-line">数据源：<b>Nightscout /api/v1/entries</b> 最新一条 <code>sgv</code>（mg/dL）</div>
+  <div class="flow">
+    <span class="node src">entries.sgv (mg/dL)</span><span class="arr">→</span>
+    <span class="node calc">÷18 (mmol/L)</span><span class="arr">→</span>
+    <span class="node out">BG</span><span class="arr">→</span>
+    <span class="node cmp">&lt; 4 ?</span>
+  </div>
+  <span class="loc">scheduler.py:173-174</span><span class="loc">rule_engine.py:450</span>
+  <pre><span class="c"># scheduler 取最新 sgv → state.bg（mg/dL）</span>
+<span class="k">def</span> <span class="f">build_snapshot_ctx</span>(...):
+    BG = round(view.bg / 18, 1)  <span class="k">if</span> unit == <span class="s">"mmol/L"</span> <span class="k">else</span> round(view.bg, 1)
+<span class="c"># _eval_cond: float(BG) &lt; 4</span></pre>
+  <p class="src-line">注：内部统一 mg/dL，输出按配置单位换算；保留一位小数。</p>
+</div>
+
+<div class="cond" id="c-delta">
+  <div class="cond-hd"><span class="name">delta(5min)</span><span class="tag field">→ delta</span></div>
+  <div class="src-line">数据源：<b>DeltaCalculator</b> 官方 AAPS 算法，最近 30 点 sgv 历史</div>
+  <div class="flow">
+    <span class="node src">sgv 历史(30点)</span><span class="arr">→</span>
+    <span class="node calc">window_avg(5)</span><span class="arr">→</span>
+    <span class="node out">DELTA</span><span class="arr">→</span>
+    <span class="node cmp">&lt; -1 ?</span>
+  </div>
+  <span class="loc">deltas.py:58-80</span><span class="loc">scheduler.py:175</span>
+  <pre><span class="c"># 官方口径：窗口 (2.5, P+2.5] 分钟内每个读数 vs 最新值，按 5min 速率归一后取均值</span>
+<span class="k">def</span> <span class="f">window_avg</span>(P):
+    vals = [(最新recalc - 该点recalc) / (分钟差/5)
+            <span class="k">for</span> 该点 <span class="k">in</span> history <span class="k">if</span> 2.5 &lt; 分钟差 &lt;= P+2.5 <span class="k">and</span> sgv&gt;39 <span class="k">and not</span> filled]
+    <span class="k">return</span> mean(vals) <span class="k">or</span> <span class="k">None</span>
+delta = window_avg(5)  <span class="c"># 负=下降</span></pre>
+</div>
+
+<div class="cond" id="c-short">
+  <div class="cond-hd"><span class="name">shortAvgDelta(15min)</span><span class="tag field">→ short_delta</span></div>
+  <div class="src-line">同上算法，窗口 P=15；<b>空窗口回退到 delta</b></div>
+  <div class="flow">
+    <span class="node src">sgv 历史</span><span class="arr">→</span>
+    <span class="node calc">window_avg(15)</span><span class="arr">→</span>
+    <span class="node out">SHORT_DELTA</span><span class="arr">→</span>
+    <span class="node cmp">&lt; -1 ?</span>
+  </div>
+  <span class="loc">deltas.py:71,76-77</span>
+  <pre>short = window_avg(15)
+<span class="k">if</span> short <span class="k">is</span> <span class="k">None</span>: short = delta   <span class="c"># 回退链</span></pre>
+</div>
+
+<div class="cond" id="c-long">
+  <div class="cond-hd"><span class="name">longAvgDelta(30min)</span><span class="tag field">→ long_delta</span></div>
+  <div class="src-line">窗口 P=30，反映整体趋势；<b>空窗口回退到 short</b></div>
+  <div class="flow">
+    <span class="node src">sgv 历史</span><span class="arr">→</span>
+    <span class="node calc">window_avg(30)</span><span class="arr">→</span>
+    <span class="node out">LONG_DELTA</span><span class="arr">→</span>
+    <span class="node cmp">&gt; 1 ?</span>
+  </div>
+  <span class="loc">deltas.py:72,78-79</span>
+  <pre>long = window_avg(30)
+<span class="k">if</span> long <span class="k">is</span> <span class="k">None</span>: long = short</pre>
+</div>
+
+<div class="cond" id="c-final">
+  <div class="cond-hd"><span class="name">最终预测BG</span><span class="tag field">→ final_value</span></div>
+  <div class="src-line">数据源：<b>devicestatus.openaps.suggested.reason</b> 解析出的各预测值</div>
+  <div class="flow">
+    <span class="node src">IOB/COB/UAM/minPredBG</span><span class="arr">→</span>
+    <span class="node calc">取最小 + minGuardBG兜底</span><span class="arr">→</span>
+    <span class="node out">FINAL_VALUE</span><span class="arr">→</span>
+    <span class="node cmp">&lt; 3.9 ?</span>
+  </div>
+  <span class="loc">scheduler.py:290-301</span><span class="loc">rule_engine.py:461</span>
+  <pre><span class="c"># _calc_final_decision（与 v03 一致）</span>
+preds = [(k, params[k]) <span class="k">for</span> k <span class="k">in</span> (IOBpredBG,COBpredBG,UAMpredBG,minPredBG) <span class="k">if</span> &gt;0]
+source, value = min(preds)              <span class="c"># 各预测取最低</span>
+<span class="k">if</span> value &lt; params.minGuardBG: value = params.minGuardBG  <span class="c"># 兜底</span>
+FINAL_VALUE = value/18 (mmol) <span class="k">else</span> value</pre>
+  <p class="src-line">附带 <code>FINAL_SOURCE</code> 记录来源名，可用于消息模板。</p>
+</div>
+
+<div class="cond" id="c-bgd">
+  <div class="cond-hd"><span class="name">血糖延迟(分钟)</span><span class="tag field">→ bg_delay_min</span></div>
+  <div class="src-line">数据源：任务绑定数据源的最新 <b>entries 时间戳</b></div>
+  <div class="flow">
+    <span class="node src">last_entry_ts</span><span class="arr">→</span>
+    <span class="node calc">(now − ts)/60</span><span class="arr">→</span>
+    <span class="node out">BG_DELAY</span><span class="arr">→</span>
+    <span class="node cmp">&gt; 20 ?</span>
+  </div>
+  <span class="loc">rule_engine.py:502</span>
+  <pre>BG_DELAY = (now - view.last_entry_ts/1000)//60  <span class="k">if</span> last_entry_ts <span class="k">else</span> 9999
+<span class="c"># 无数据=9999 → "大于N"成立（断线报警）</span></pre>
+</div>
+
+<div class="cond" id="c-trend">
+  <div class="cond-hd"><span class="name">血糖趋势</span><span class="tag field">→ trend_dir</span></div>
+  <div class="src-line">数据源：<b>entries 最新一条 direction 箭头字段</b></div>
+  <div class="flow">
+    <span class="node src">direction</span><span class="arr">→</span>
+    <span class="node calc">映射 5 档枚举</span><span class="arr">→</span>
+    <span class="node out">TREND_DIR</span><span class="arr">→</span>
+    <span class="node cmp">== 2 ?</span>
+  </div>
+  <span class="loc">scheduler.py ctx 构建</span><span class="loc">rule_engine.py COND_FIELDS</span>
+  <pre>DoubleUp=2(急速上升) SingleUp/FortyFiveUp=1(上升) Flat=0(平稳)
+FortyFiveDown/SingleDown=-1(下降) DoubleDown=-2(急速下降) 未知=0</pre>
+  <p class="src-line">只能用「等于」。示例：快速下降低血糖 = <code>血糖趋势 等于 急速下降 且 血糖绝对值 小于 4</code>。</p>
+</div>
+
+<div class="cond" id="c-range">
+  <div class="cond-hd"><span class="name">波动幅度·30分钟</span><span class="tag field">→ bg_range_30m</span><span class="tag strict">历史类</span></div>
+  <div class="src-line">派生：<b>近 30 分钟 max(sgv) − min(sgv)</b>，按显示单位输出</div>
+  <div class="flow">
+    <span class="node src">血糖历史缓冲(400点)</span><span class="arr">→</span>
+    <span class="node calc">窗口极差</span><span class="arr">→</span>
+    <span class="node out">BG_RANGE_30M</span><span class="arr">→</span>
+    <span class="node cmp">&gt; 3 ?</span>
+  </div>
+  <p class="src-line">delta 只测方向，测不出"过山车"幅度——这个补上。历史不足（重启后约 30 分钟内）判不满足，不误报。</p>
+</div>
+
+<div class="cond" id="c-hidur">
+  <div class="cond-hd"><span class="name">连续高血糖时长(分钟)</span><span class="tag field">→ bg_high_dur</span><span class="tag strict">历史类</span></div>
+  <div class="src-line">派生：血糖<b>连续高于 10.0 mmol/L（180 mg/dL）</b>的分钟数，固定临床阈值</div>
+  <div class="flow">
+    <span class="node src">血糖历史缓冲</span><span class="arr">→</span>
+    <span class="node calc">反向数连续 &gt;180</span><span class="arr">→</span>
+    <span class="node out">BG_HI_DUR</span><span class="arr">→</span>
+    <span class="node cmp">&gt;= 60 ?</span>
+  </div>
+  <p class="src-line">示例："高血糖已 1 小时才提醒" = <code>大于等于 60</code>。内部 mg/dL 口径，与显示单位无关；当前已回落则归 0。</p>
+</div>
+
+<div class="cond" id="c-lodur">
+  <div class="cond-hd"><span class="name">连续低血糖时长(分钟)</span><span class="tag field">→ bg_low_dur</span><span class="tag strict">历史类</span></div>
+  <div class="src-line">派生：血糖<b>连续低于 3.9 mmol/L（70 mg/dL）</b>的分钟数，固定临床阈值</div>
+  <div class="flow">
+    <span class="node src">血糖历史缓冲</span><span class="arr">→</span>
+    <span class="node calc">反向数连续 &lt;70</span><span class="arr">→</span>
+    <span class="node out">BG_LO_DUR</span><span class="arr">→</span>
+    <span class="node cmp">&gt;= 15 ?</span>
+  </div>
+  <p class="src-line">示例："低血糖持续 15 分钟才报"——过滤一闪而过的假性低值。重启后需积累数据才生效。</p>
+</div>
+
+<h2><span class="num">03</span>IOB 与 COB 类（4）</h2>
+
+<div class="cond" id="c-iob">
+  <div class="cond-hd"><span class="name">总IOB</span><span class="tag field">→ iob</span></div>
+  <div class="src-line">数据源：<b>devicestatus.openaps.iob.iob</b>（单位 U）</div>
+  <div class="flow">
+    <span class="node src">openaps.iob.iob</span><span class="arr">→</span>
+    <span class="node calc">round(2)</span><span class="arr">→</span>
+    <span class="node out">IOB</span><span class="arr">→</span>
+    <span class="node cmp">&gt; 3 ?</span>
+  </div>
+  <span class="loc">ns_client.py:155</span><span class="loc">rule_engine.py:455</span>
+</div>
+
+<div class="cond" id="c-biob">
+  <div class="cond-hd"><span class="name">大剂量IOB</span><span class="tag field">→ bolus_iob</span></div>
+  <div class="src-line">派生：<b>总IOB − 基础率IOB</b>（餐前活性剩余）</div>
+  <div class="flow">
+    <span class="node src">iob − basaliob</span><span class="arr">→</span>
+    <span class="node out">BOLUS_IOB</span><span class="arr">→</span>
+    <span class="node cmp">&gt; 2 ?</span>
+  </div>
+  <span class="loc">ns_client.py:164</span>
+</div>
+
+<div class="cond" id="c-basiob">
+  <div class="cond-hd"><span class="name">基础率IOB</span><span class="tag field">→ basal_iob</span></div>
+  <div class="src-line">数据源：<b>devicestatus.openaps.iob.basaliob</b></div>
+  <div class="flow">
+    <span class="node src">openaps.iob.basaliob</span><span class="arr">→</span>
+    <span class="node out">BASAL_IOB</span><span class="arr">→</span>
+    <span class="node cmp">&gt; 1 ?</span>
+  </div>
+  <span class="loc">ns_client.py:156</span>
+</div>
+
+<div class="cond" id="c-cob">
+  <div class="cond-hd"><span class="name">COB</span><span class="tag field">→ cob</span></div>
+  <div class="src-line">数据源：<b>openaps.cob.cob</b>；为 0 时从 <code>suggested.reason</code> 正则提取 <code>COB:xx</code></div>
+  <div class="flow">
+    <span class="node src">openaps.cob.cob</span><span class="arr">→</span>
+    <span class="node calc">正则回退 reason</span><span class="arr">→</span>
+    <span class="node out">COB</span><span class="arr">→</span>
+    <span class="node cmp">&gt; 30 ?</span>
+  </div>
+  <span class="loc">ns_client.py:125-140</span>
+  <pre>cob = float(openaps.cob.cob <span class="k">or</span> 0)
+<span class="k">if</span> cob == 0:
+    m = re.search(<span class="s">r"COB[:\s]+([\d.]+)"</span>, reason); cob = float(m) <span class="k">if</span> m <span class="k">else</span> 0</pre>
+</div>
+
+<h2><span class="num">04</span>手表与充电类（12）</h2>
+<p class="lead">这一类依赖一个内存历史缓冲 <code>_watch_hist = [(ts, battery, charging)]</code>（<span class="loc">scheduler.py:255-265</span>），每轮追加最新 devicestatus 点。<b>历史类字段属 _STRICT_FIELDS，历史不足返回 None 判不满足</b>，重启后需积累约 N+30 分钟才生效。</p>
+
+<figure class="diagram">
+  <pre class="mermaid">
+flowchart LR
+  DS["devicestatus uploaderBattery isCharging"] -->|每轮去重追加| H["_watch_hist ts 电量 充电"]
+  H -->|hist_point 取距最新N分钟| P["N分钟前的点"]
+  P --> D["掉电幅度 该点电量 减 当前电量"]
+  P --> C["充电状态N分钟前 1/0/None"]
+  H -->|dur_at 反向数连续同状态| U["连续充电 未充时长"]
+  classDef s fill:#e0f2f7,stroke:#0e7490
+  classDef c fill:#ece7fb,stroke:#7c3aed
+  classDef o fill:#e3edfb,stroke:#2563eb
+  class DS s
+  class H,P c
+  class D,C,U o
+  </pre>
+  <figcaption>图 4 · 手表历史缓冲如何派生出掉电幅度 / 充电状态·N分钟前 / 连续时长</figcaption>
+</figure>
+
+<div class="cond" id="c-wbat">
+  <div class="cond-hd"><span class="name">手表电量(%)</span><span class="tag field">→ watch_battery</span></div>
+  <div class="src-line">数据源：<b>devicestatus.uploaderBattery</b>（取所有源中最新、非 aaps-push 设备）</div>
+  <div class="flow">
+    <span class="node src">uploaderBattery</span><span class="arr">→</span>
+    <span class="node calc">int(round)</span><span class="arr">→</span>
+    <span class="node out">WATCH_BATTERY</span><span class="arr">→</span>
+    <span class="node cmp">&lt; 20 ?</span>
+  </div>
+  <span class="loc">scheduler.py:240-248</span><span class="loc">rule_engine.py:472</span>
+  <p class="src-line">⚠️ 本质是"运行 AAPS 上传器的那台设备"电量；手机+手表同时上传时取最新一条，可能读到手机。</p>
+</div>
+
+<div class="cond" id="c-woff">
+  <div class="cond-hd"><span class="name">手表离线(分钟)</span><span class="tag field">→ watch_offline_min</span></div>
+  <div class="src-line">数据源：最新 devicestatus 的 <b>时间戳</b></div>
+  <div class="flow">
+    <span class="node src">watch_ts</span><span class="arr">→</span>
+    <span class="node calc">(now − ts)/60</span><span class="arr">→</span>
+    <span class="node out">WATCH_OFFLINE</span><span class="arr">→</span>
+    <span class="node cmp">&gt; 60 ?</span>
+  </div>
+  <span class="loc">rule_engine.py:474-475</span>
+  <p class="src-line">真实含义=「AAPS 端多久没向 NS 上报」，手表关机/没网/手机没网/进程停都会变大；无数据=9999。</p>
+</div>
+
+<div class="cond" id="c-wdrop30">
+  <div class="cond-hd"><span class="name">掉电幅度·30分钟</span><span class="tag field">→ watch_drop_30m</span><span class="tag strict">历史类</span></div>
+  <div class="src-line">派生：<b>_drop_at(hist,30)</b> = 30分钟前点电量 − 当前电量（正=掉了几个百分点）</div>
+  <div class="flow">
+    <span class="node src">_watch_hist</span><span class="arr">→</span>
+    <span class="node calc">该点电量 − 当前</span><span class="arr">→</span>
+    <span class="node out">WATCH_DROP</span><span class="arr">→</span>
+    <span class="node cmp">&gt; 2 ?</span>
+  </div>
+  <span class="loc">scheduler.py:25-28,259</span>
+  <pre><span class="k">def</span> <span class="f">_drop_at</span>(hist, n):
+    p = _hist_point(hist, n)        <span class="c"># 距最新−n分钟最近点</span>
+    <span class="k">return</span> round(p.battery - hist[-1].battery, 1) <span class="k">if</span> p <span class="k">else</span> <span class="k">None</span></pre>
+</div>
+
+<div class="cond" id="c-wdropN">
+  <div class="cond-hd"><span class="name">掉电幅度·5 / 15 / 60 分钟</span><span class="tag field">→ watch_drop_5/15/60m</span><span class="tag strict">历史类</span></div>
+  <div class="src-line">与 30 分钟同函数，仅窗口 n 不同（5 反应快、60 平滑）</div>
+  <div class="flow">
+    <span class="node src">_watch_hist</span><span class="arr">→</span>
+    <span class="node calc">_drop_at(hist, n)</span><span class="arr">→</span>
+    <span class="node out">WATCH_DROP_nM</span><span class="arr">→</span>
+    <span class="node cmp">&gt; 2 ?</span>
+  </div>
+  <span class="loc">scheduler.py:260-261</span>
+</div>
+
+<div class="cond" id="c-chg">
+  <div class="cond-hd"><span class="name">充电状态</span><span class="tag field">→ watch_charging_flag</span></div>
+  <div class="src-line">数据源：<b>devicestatus.isCharging</b>（当前瞬时值）</div>
+  <div class="flow">
+    <span class="node src">isCharging</span><span class="arr">→</span>
+    <span class="node calc">1 / 0</span><span class="arr">→</span>
+    <span class="node out">CHARGING_FLAG</span><span class="arr">→</span>
+    <span class="node cmp">== 1 ?</span>
+  </div>
+  <span class="loc">scheduler.py:249</span><span class="loc">rule_engine.py:480</span>
+  <p class="src-line">模板显示文本 <code>CHARGING</code> = 充电中/未充电/未知（None 时）。</p>
+</div>
+
+<div class="cond" id="c-chgN">
+  <div class="cond-hd"><span class="name">充电状态·5/15/30/60分钟前</span><span class="tag field">→ watch_chg_5/15/30/60m</span><span class="tag strict">历史类</span></div>
+  <div class="src-line">派生：<b>_chg_at(hist,n)</b> = N分钟前那一刻 1=充电/0=未充/None=不足</div>
+  <div class="flow">
+    <span class="node src">_watch_hist</span><span class="arr">→</span>
+    <span class="node calc">_chg_at(hist, n)</span><span class="arr">→</span>
+    <span class="node out">WATCH_CHG_nM</span><span class="arr">→</span>
+    <span class="node cmp">== 1 ?</span>
+  </div>
+  <span class="loc">scheduler.py:31-36,262-263</span>
+  <pre><span class="k">def</span> <span class="f">_chg_at</span>(hist, n):
+    p = _hist_point(hist, n)
+    <span class="k">return</span> <span class="k">None</span> <span class="k">if</span> (p <span class="k">is</span> <span class="k">None</span> <span class="k">or</span> p.chg <span class="k">is</span> <span class="k">None</span>) <span class="k">else</span> (1 <span class="k">if</span> p.chg <span class="k">else</span> 0)</pre>
+  <p class="src-line">典型组合：充电断开 = <code>充电状态30分钟前==1 且 充电状态==0 且 掉电幅度·30&gt;2</code>。</p>
+</div>
+
+<div class="cond" id="c-chgdur">
+  <div class="cond-hd"><span class="name">连续充电时长(分钟)</span><span class="tag field">→ watch_chg_dur</span><span class="tag strict">历史类</span></div>
+  <div class="src-line">派生：<b>_dur_at(hist, True)</b> = 截至最新点连续"充电中"的分钟数</div>
+  <div class="flow">
+    <span class="node src">_watch_hist</span><span class="arr">→</span>
+    <span class="node calc">反向数连续 chg==True</span><span class="arr">→</span>
+    <span class="node out">WATCH_CHG_DUR</span><span class="arr">→</span>
+    <span class="node cmp">&gt;= 30 ?</span>
+  </div>
+  <span class="loc">scheduler.py:39-50,264</span>
+  <pre><span class="k">def</span> <span class="f">_dur_at</span>(hist, want):
+    <span class="k">if</span> hist[-1].chg != want: <span class="k">return</span> 0     <span class="c"># 当前不满足=0</span>
+    start = 最新ts
+    <span class="k">for</span> p <span class="k">in</span> reversed(hist):
+        <span class="k">if</span> p.chg != want: <span class="k">break</span>
+        start = p.ts
+    <span class="k">return</span> (最新ts - start)/60000</pre>
+  <p class="src-line">接触不良判定用：连续充电≥30 但仍在掉电 = 稳定插着却充不进。</p>
+</div>
+
+<div class="cond" id="c-nochg">
+  <div class="cond-hd"><span class="name">连续未充时长(分钟)</span><span class="tag field">→ watch_nochg_dur</span><span class="tag strict">历史类</span></div>
+  <div class="src-line">同上 <b>_dur_at(hist, False)</b>，统计连续"未充电"分钟数</div>
+  <div class="flow">
+    <span class="node src">_watch_hist</span><span class="arr">→</span>
+    <span class="node calc">_dur_at(hist, False)</span><span class="arr">→</span>
+    <span class="node out">WATCH_NOCHG_DUR</span><span class="arr">→</span>
+    <span class="node cmp">&gt;= 5 ?</span>
+  </div>
+  <span class="loc">scheduler.py:265</span>
+  <p class="src-line">用途：过滤"拔掉又插回"的抖动，断开须保持≥N分钟才报。</p>
+</div>
+
+<h2><span class="num">05</span>泵类（5）</h2>
+
+<div class="cond" id="c-poff">
+  <div class="cond-hd"><span class="name">泵延迟(分钟)</span><span class="tag field">→ pump_offline_min</span></div>
+  <div class="src-line">数据源：<b>devicestatus.pump.status.timestamp</b></div>
+  <div class="flow">
+    <span class="node src">pump_ts</span><span class="arr">→</span>
+    <span class="node calc">(now − ts)/60</span><span class="arr">→</span>
+    <span class="node out">PUMP_OFFLINE</span><span class="arr">→</span>
+    <span class="node cmp">&gt; 30 ?</span>
+  </div>
+  <span class="loc">ns_client.py:177</span><span class="loc">rule_engine.py:499-500</span>
+  <p class="src-line">无数据=9999（"大于N"成立=泵失联报警）。</p>
+</div>
+
+<div class="cond" id="c-pabn">
+  <div class="cond-hd"><span class="name">泵状态异常</span><span class="tag field">→ pump_abnormal_flag</span></div>
+  <div class="src-line">数据源：<b>pump.status.status</b> 文本</div>
+  <div class="flow">
+    <span class="node src">pump_status</span><span class="arr">→</span>
+    <span class="node calc">∉{normal,未知,""}→1</span><span class="arr">→</span>
+    <span class="node out">PUMP_ABNORMAL</span><span class="arr">→</span>
+    <span class="node cmp">== 1 ?</span>
+  </div>
+  <span class="loc">rule_engine.py:120</span>
+  <pre>pump_abnormal_flag = 0 <span class="k">if</span> PUMP_STATUS <span class="k">in</span> (<span class="s">"normal"</span>,<span class="s">"未知"</span>,<span class="s">""</span>) <span class="k">else</span> 1</pre>
+</div>
+
+<div class="cond" id="c-res">
+  <div class="cond-hd"><span class="name">泵药量(单位)</span><span class="tag field">→ reservoir</span></div>
+  <div class="src-line">数据源：<b>devicestatus.pump.reservoir</b>（剩余药液 U）</div>
+  <div class="flow">
+    <span class="node src">pump.reservoir</span><span class="arr">→</span>
+    <span class="node out">RESERVOIR</span><span class="arr">→</span>
+    <span class="node cmp">&lt; 20 ?</span>
+  </div>
+  <span class="loc">ns_client.py:175</span><span class="loc">rule_engine.py:496-497</span>
+  <p class="src-line">无数据=0；换药提醒用"小于 N"。</p>
+</div>
+
+<div class="cond" id="c-pbat">
+  <div class="cond-hd"><span class="name">泵电池电量(%)</span><span class="tag field">→ pump_battery</span><span class="tag strict">严格类</span></div>
+  <div class="src-line">数据源：<b>devicestatus.pump.battery.percent</b></div>
+  <div class="flow">
+    <span class="node src">pump.battery.percent</span><span class="arr">→</span>
+    <span class="node out">PUMP_BATTERY</span><span class="arr">→</span>
+    <span class="node cmp">&lt; 20 ?</span>
+  </div>
+  <span class="loc">ns_client.py:190</span>
+  <p class="src-line">⚠️ 部分驱动（如 Dana）只报电压不报百分比 → 视为数据不足判不满足，不误报。</p>
+</div>
+
+<div class="cond" id="c-basal">
+  <div class="cond-hd"><span class="name">当前基础率(单位/小时)</span><span class="tag field">→ basal_rate</span></div>
+  <div class="src-line">数据源：<b>devicestatus.pump.extended.BaseBasalRate</b></div>
+  <div class="flow">
+    <span class="node src">BaseBasalRate</span><span class="arr">→</span>
+    <span class="node out">BASAL_RATE</span><span class="arr">→</span>
+    <span class="node cmp">&gt; 2 ?</span>
+  </div>
+  <span class="loc">ns_client.py:186</span>
+  <p class="src-line">用途：捕捉临时基础率飙升/异常（如运动模式未恢复）；无数据按 0。</p>
+</div>
+
+<h2><span class="num">06</span>大剂量与碳水类（4）</h2>
+
+<div class="cond" id="c-bago">
+  <div class="cond-hd"><span class="name">上次大剂量(分钟)</span><span class="tag field">→ bolus_ago_min</span></div>
+  <div class="src-line">数据源：<b>/api/v1/treatments</b>（count=200）最新一次手动大剂量时间</div>
+  <div class="flow">
+    <span class="node src">treatments</span><span class="arr">→</span>
+    <span class="node calc">筛 bolus+insulin&gt;0</span><span class="arr">→</span>
+    <span class="node out">last_bolus_ts</span><span class="arr">→</span>
+    <span class="node cmp">&gt; 120 ?</span>
+  </div>
+  <span class="loc">ns_client.py:82-105</span><span class="loc">scheduler.py:197-202</span><span class="loc">rule_engine.py:504-505</span>
+  <div class="callout good">
+    <h4>✅ SMB 排除（已实现）</h4>
+    筛选条件为 <code>eventType 含 bolus + insulin&gt;0 + type≠SMB</code>——AAPS 自动微剂量（SMB，每 4-5 分钟一条 0.1~0.8U 的 Correction Bolus）<mark class="key">不算大剂量</mark>，否则 loop 活跃时"上次大剂量"会被持续刷新、"超过 N 分钟没打"永不触发。只认手动打的餐前/校正大剂量（type=NORMAL）。
+  </div>
+</div>
+
+<div class="cond" id="c-cago">
+  <div class="cond-hd"><span class="name">距上次碳水(分钟)</span><span class="tag field">→ carbs_ago_min</span></div>
+  <div class="src-line">数据源：<b>同 treatments 接口</b>，筛最近一条 <code>carbs&gt;0</code> 记录（不限 eventType）</div>
+  <div class="flow">
+    <span class="node src">treatments</span><span class="arr">→</span>
+    <span class="node calc">筛 carbs&gt;0 取最新</span><span class="arr">→</span>
+    <span class="node out">CARBS_AGO</span><span class="arr">→</span>
+    <span class="node cmp">&gt;= 360 ?</span>
+  </div>
+  <p class="src-line">示例："超过 6 小时没摄入碳水" = <code>大于等于 360</code>；无记录按 0（视为刚吃过）防误报。</p>
+</div>
+
+<div class="cond" id="c-cg">
+  <div class="cond-hd"><span class="name">上次碳水(克)</span><span class="tag field">→ carbs_g</span></div>
+  <div class="src-line">数据源：同上一条，取那条记录的 <b>carbs 克数</b></div>
+  <div class="flow">
+    <span class="node src">treatments</span><span class="arr">→</span>
+    <span class="node calc">最新 carbs&gt;0 记录</span><span class="arr">→</span>
+    <span class="node out">CARBS_G</span><span class="arr">→</span>
+    <span class="node cmp">&gt;= 80 ?</span>
+  </div>
+  <p class="src-line">示例："上次吃了 80g 以上"（大餐后高血糖预警常与时间条件组合）。无记录按 0。</p>
+</div>
+
+<div class="cond" id="c-bu">
+  <div class="cond-hd"><span class="name">上次大剂量(单位)</span><span class="tag field">→ bolus_units</span></div>
+  <div class="src-line">数据源：同 <code>fetch_last_bolus</code>，<b>一并返回那一针的胰岛素 U 数</b>（与分钟数同源同一条记录）</div>
+  <div class="flow">
+    <span class="node src">treatments</span><span class="arr">→</span>
+    <span class="node calc">最新手动 bolus.insulin</span><span class="arr">→</span>
+    <span class="node out">BOLUS_UNITS</span><span class="arr">→</span>
+    <span class="node cmp">== 5 ?</span>
+  </div>
+  <span class="loc">ns_client.py:84-110</span><span class="loc">scheduler.py 状态更新</span><span class="loc">rule_engine.py COND_FIELDS</span>
+  <pre><span class="c"># fetch_last_bolus 返回 (时间戳, 单位数)</span>
+<span class="k">if</span> (t.type <span class="k">or</span> <span class="s">""</span>).upper() == <span class="s">"SMB"</span>: <span class="k">continue</span>   <span class="c"># 排除自动微剂量</span>
+<span class="k">if</span> ts &gt; best_ts: best_ts, best_u = ts, float(t.insulin)
+<span class="k">return</span> best_ts <span class="k">or</span> <span class="k">None</span>, best_u
+<span class="c"># 条件：上次大剂量(单位) == 5 / &gt;= 4 / &lt;= 6；无记录=0</span></pre>
+  <p class="src-line">用途示例："上次大剂量是 5 或 6 单位"→ <code>上次大剂量(单位) == 5</code> 或 <code>在 4~6 之间</code>（两条 AND）。</p>
+</div>
+
+<h2><span class="num">07</span>时间类（1）</h2>
+
+<div class="cond" id="c-time">
+  <div class="cond-hd"><span class="name">时间</span><span class="tag time">窗口三态</span></div>
+  <div class="src-line">特殊条件：<b>非数值比较</b>，由 <code>evaluate_window</code> 判定，支持周几过滤</div>
+  <div class="flow">
+    <span class="node src">tg_type + tg_value + weekdays</span><span class="arr">→</span>
+    <span class="node calc">evaluate_window</span><span class="arr">→</span>
+    <span class="node out">True/False</span>
+  </div>
+  <span class="loc">rule_engine.py:231-240,296-320</span>
+  <pre>none  = 恒真(仅周几过滤)
+range = 时间段，支持 22:00-7:00 跨夜
+point = 定点：仅到点后 POINT_TOLERANCE(2min) 内为真，错过当日不补发
+        每日一次由 group_dates 状态保证</pre>
+  <p class="src-line">周几任一勾选且当天不在其中 → 直接 False。时间已可作为普通条件加进任意组（v3 改造）。</p>
+</div>
+
+<h2><span class="num">08</span>求值机制：组内 AND + 组间链条</h2>
+<figure class="diagram">
+  <pre class="mermaid">
+flowchart TD
+  S["result = None"] --> G1["组1 默认无徽章 eff 组内所有条件 AND"]
+  G1 --> R1["result = eff"]
+  R1 --> G2["组2 或 且 非"]
+  G2 --> E2{"logic"}
+  E2 -->|或| O["result OR eff"]
+  E2 -->|且| AA["result AND eff"]
+  E2 -->|非| N["eff NOT 组内AND result AND eff"]
+  O --> R["最终 result"]
+  AA --> R
+  N --> R
+  classDef o fill:#fef3df,stroke:#b45309
+  classDef a fill:#e3edfb,stroke:#2563eb
+  classDef n fill:#fdecec,stroke:#c0262e
+  class O o
+  class AA a
+  class N n
+  </pre>
+  <figcaption>图 8 · 组间顺序链条折叠：或=并列分支 / 且=挂链同真 / 非=组整体取反后挂链(排除型)</figcaption>
+</figure>
+<p>组内条件全部 <code>与</code> 才 <code>cond_ok</code>；<code>非</code> 组取反后是 <mark class="key">AND NOT</mark> 排除语义（只排除、不贡献命中），<code>hit_names</code> 收集 eff 为真的组名供选组与 <code>{组名}</code> 模板。</p>
+
+<h2><span class="num">09</span>路线图：还在考虑的方向</h2>
+<p class="lead">以下方向数据链路较复杂或有歧义，暂未实现，供后续版本评估。</p>
+
+<div class="sug">
+  <div class="hd">按设备名区分手表/手机数据 <span class="cost mid">需设备识别策略</span></div>
+  <p>手机+手表同时向同一 Nightscout 上传时，"手表电量"取的是最新一条 devicestatus，可能读到手机。需按 uploader 设备名过滤，涉及多品牌命名差异。</p>
+</div>
+<div class="sug">
+  <div class="hd">COB 消耗偏差 / 基础率偏离计划 <span class="cost mid">需配置基线</span></div>
+  <p>"实际 COB 与预测偏差过大""当前基础率偏离用户设定基线"需要先导入泵的基础率表作为基线，配置成本较高。</p>
+</div>
+<div class="sug">
+  <div class="hd">夜间低血糖预测提前量 <span class="cost mid">需预测外推</span></div>
+  <p>基于 minGuardBG 斜率外推"预计 40 分钟后跌破 3.9"，比"最终预测BG 小于 3.9"更早预警；需要更长的历史缓冲与防抖设计。</p>
+</div>
+
+<div class="callout good">
+  <h4>小结</h4>
+  37 个条件已覆盖血糖/增量/趋势、IOB/COB/预测、大剂量/碳水、手表/充电历史、泵、时间六大维度，"无数据兜底"与"历史类防误报"贯穿全部。<mark class="key">上次大剂量已排除 SMB 自动微剂量</mark>，只认手动大剂量。历史类条件（掉电幅度、充电状态·N分钟前、连续时长、波动幅度、连续高/低血糖时长）重启后需积累约 N+30 分钟数据才生效，期间一律判不满足。
+</div>
+
+<footer>
+  <div class="sources">
+    <h2>参考来源</h2>
+    <ol>
+      <li id="cite-1"><span class="src-title">Nightscout 官方文档 · Discover your Nightscout site（careportal 事件类型定义：Meal Bolus / Correction Bolus / Temp Basal / Profile Switch 等）。</span><a class="src-url" href="https://nightscout.github.io/nightscout/discover/" target="_blank" rel="noopener">https://nightscout.github.io/nightscout/discover/</a></li>
+      <li id="cite-2"><span class="src-title">AndroidAPS 官方文档 · Key AAPS Features（Super Micro Bolus 定义：5 分钟间隔的小剂量序列）。</span><a class="src-url" href="https://androidaps.readthedocs.io/en/latest/DailyLifeWithAaps/KeyAapsFeatures.html" target="_blank" rel="noopener">https://androidaps.readthedocs.io/en/latest/DailyLifeWithAaps/KeyAapsFeatures.html</a></li>
+      <li id="cite-3"><span class="src-title">实现来源：rule_engine.py / scheduler.py / ns_client.py / deltas.py（v1.0-beta02 实际代码）。</span><span class="src-url">GitHub: zhantaopin/aaps-push</span></li>
+    </ol>
+  </div>
+  <p style="margin-top:18px">AAPS-Push 条件图鉴 · 37 个条件逐项说明 · v1.0-beta02 · <a href="/" style="color:var(--accent)">返回管理台</a></p>
+</footer>
+
+</div>
+<script src="/static/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:true,theme:'neutral',securityLevel:'loose'});</script>
+</body>
+</html>
