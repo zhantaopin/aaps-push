@@ -371,9 +371,11 @@ function switchTab(name,btn){
 }
 async function boot(){
   try{await api('/api/status');}catch(e){return;}
+  document.getElementById('loginMask').style.display='none';
   await loadConfig();refreshStatus();loadEvents();
   setInterval(refreshStatus,10000);setInterval(loadEvents,30000);
 }
+boot();
 async function loadConfig(){
   const r=await api('/api/config');configData=r.json;
   if(!configData.ns_sources||!configData.ns_sources.length){
